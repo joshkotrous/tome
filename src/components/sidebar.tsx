@@ -1,7 +1,7 @@
 import { Database, SidebarClose } from "lucide-react";
 import { Button } from "./ui/button";
 import { useState } from "react";
-import { cn } from "@/lib/utils";
+import ResizableContainer from "./ui/resizableContainer";
 
 export default function Sidebar() {
   const [open, setOpen] = useState(true);
@@ -11,11 +11,16 @@ export default function Sidebar() {
   }
 
   return (
-    <div
-      className={cn(
-        "relative w-56 bg-zinc-900 border border-zinc-800 h-full rounded-r-md",
-        !open && "w-10"
-      )}
+    <ResizableContainer
+      direction="horizontal"
+      defaultSize={224}
+      minSize={60}
+      maxSize={800}
+      snapThreshold={60}
+      isCollapsed={!open}
+      onCollapsedChange={(collapsed) => setOpen(!collapsed)}
+      className="bg-zinc-900 border border-zinc-800 h-full rounded-r-md"
+      collapsedSize={40}
     >
       {open && (
         <div className="w-full flex justify-between items-center p-1.5 border-b border-zinc-800">
@@ -37,7 +42,7 @@ export default function Sidebar() {
       </div>
 
       {open && <DatabaseList />}
-    </div>
+    </ResizableContainer>
   );
 }
 
@@ -45,8 +50,8 @@ function DatabaseList() {
   const databases: string[] = ["", ""];
   return (
     <>
-      {databases.map(() => (
-        <DatabaseListItem />
+      {databases.map((_, index) => (
+        <DatabaseListItem key={index} />
       ))}
     </>
   );

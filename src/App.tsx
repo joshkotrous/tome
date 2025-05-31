@@ -1,5 +1,5 @@
-import Editor from "./components/editor";
 import BottomBar from "./components/bottomBar";
+import Editor from "./components/editor";
 import Sidebar from "./components/sidebar";
 import Toolbar from "./components/toolbar";
 
