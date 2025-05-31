@@ -13,9 +13,9 @@ export default function Sidebar() {
   return (
     <ResizableContainer
       direction="horizontal"
-      defaultSize={224}
+      defaultSize={250}
       minSize={60}
-      maxSize={800}
+      maxSize={500}
       snapThreshold={60}
       isCollapsed={!open}
       onCollapsedChange={(collapsed) => setOpen(!collapsed)}

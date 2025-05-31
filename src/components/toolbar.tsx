@@ -3,7 +3,7 @@ import { Button } from "./ui/button";
 
 export default function Toolbar() {
   return (
-    <div className="w-full h-16 grid grid-cols-[4rem_1fr_1fr_1fr] gap-3 items-center border-b border-zinc-800">
+    <div className="w-full h-14 grid grid-cols-[4rem_1fr_1fr_1fr] gap-3 items-center border-b border-zinc-800">
       <div id="mac-stoplight" className="w-10 h-full"></div>
       <div className="flex gap-2">
         <Button size="xs">

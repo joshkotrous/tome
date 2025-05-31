@@ -1,16 +1,16 @@
 import BottomBar from "./components/bottomBar";
-import Editor from "./components/editor";
+import SqlEditor from "./components/editor";
 import Sidebar from "./components/sidebar";
 import Toolbar from "./components/toolbar";
 
 function App() {
   return (
-    <div className="flex flex-col w-full h-full bg-zinc-950 dark">
+    <div className="w-full h-full bg-zinc-950 dark flex flex-col">
       <Toolbar />
-      <div className="size-full flex">
+      <div className="flex-1 flex min-h-0">
         <Sidebar />
-        <div className="size-full flex flex-col">
-          <Editor />
+        <div className="flex-1 flex flex-col min-w-0">
+          <SqlEditor />
           <BottomBar />
         </div>
       </div>

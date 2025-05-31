@@ -19,10 +19,10 @@ export default function BottomBar() {
       snapThreshold={60}
       isCollapsed={!open}
       onCollapsedChange={(collapsed) => setOpen(!collapsed)}
-      className="bg-zinc-900 border border-zinc-800 h-full rounded-r-md"
+      className="bg-zinc-900 border border-zinc-800 rounded-t-md"
       collapsedSize={30}
     >
-      <div className="border-b  w-full flex justify-end">
+      <div className="border-b w-full flex justify-end">
         <Button
           onClick={handleOpen}
           size="xs"
