@@ -33,13 +33,21 @@ export default function AddDatabaseButton() {
 
 type AddDatabaseStep = "engine" | "connection";
 
-function AddDatabaseDialog({ children }: { children: React.ReactNode }) {
+export function AddDatabaseDialog({
+  children,
+  open,
+  setOpen,
+}: {
+  children?: React.ReactNode;
+  open?: boolean;
+  setOpen?: React.Dispatch<SetStateAction<boolean>>;
+}) {
   const [step, setStep] = useState<AddDatabaseStep>("engine");
   const [database, setDatabase] = useState<Omit<Database, "id">>({
     connection: {
       database: "",
       host: "",
-      username: "",
+      user: "",
       password: "",
       port: 5432,
       ssl: true,
@@ -48,8 +56,6 @@ function AddDatabaseDialog({ children }: { children: React.ReactNode }) {
     engine: "Postgres",
     name: "",
   });
-
-  const [open, setOpen] = useState(false);
 
   const [loading, setLoading] = useState(false);
 
@@ -65,7 +71,9 @@ function AddDatabaseDialog({ children }: { children: React.ReactNode }) {
           />
         );
       case "connection":
-        return <ConnectionDetailsForm onChange={setDatabase} />;
+        return (
+          <ConnectionDetailsForm values={database} onChange={setDatabase} />
+        );
     }
   }
 
@@ -92,7 +100,9 @@ function AddDatabaseDialog({ children }: { children: React.ReactNode }) {
     await window.db.createDatabase(database);
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
     setLoading(false);
-    setOpen(false);
+    if (setOpen) {
+      setOpen(false);
+    }
   }
 
   useEffect(() => {
@@ -102,7 +112,7 @@ function AddDatabaseDialog({ children }: { children: React.ReactNode }) {
         connection: {
           database: "",
           host: "",
-          username: "",
+          user: "",
           password: "",
           port: 0,
           ssl: true,
@@ -146,7 +156,7 @@ function AddDatabaseDialog({ children }: { children: React.ReactNode }) {
                   !database.connection.database ||
                   !database.connection.password ||
                   !database.connection.port ||
-                  !database.connection.username ||
+                  !database.connection.user ||
                   !database.connection.host
                 }
                 onClick={() => saveDatabase(database)}
@@ -163,7 +173,7 @@ function AddDatabaseDialog({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TestConnectionButton({
+export function TestConnectionButton({
   database,
 }: {
   database: Omit<Database, "id">;
@@ -209,7 +219,7 @@ function TestConnectionButton({
             !database.connection.database ||
             !database.connection.password ||
             !database.connection.port ||
-            !database.connection.username ||
+            !database.connection.user ||
             !database.connection.host
           }
           onClick={() => testConnection(database)}
@@ -298,16 +308,20 @@ function SelectDatabaseEngine({
   );
 }
 
-function ConnectionDetailsForm({
+export function ConnectionDetailsForm({
+  values,
   onChange,
 }: {
-  onChange: React.Dispatch<SetStateAction<Omit<Database, "id">>>;
+  values: Omit<Database, "id"> | Database;
+  onChange:
+    | React.Dispatch<SetStateAction<Omit<Database, "id">>>
+    | React.Dispatch<SetStateAction<Database>>;
 }) {
   const handleTopLevelChange = (
     field: keyof Omit<Database, "connection" | "engine">,
     value: string
   ) => {
-    onChange((prev) => ({
+    onChange((prev: any) => ({
       ...prev,
       [field]: value,
     }));
@@ -317,7 +331,7 @@ function ConnectionDetailsForm({
     field: keyof Connection,
     value: string | number | boolean
   ) => {
-    onChange((prev) => ({
+    onChange((prev: any) => ({
       ...prev,
       connection: {
         ...prev.connection,
@@ -337,6 +351,7 @@ function ConnectionDetailsForm({
           <Label htmlFor="name">Display Name</Label>
           <Input
             id="name"
+            value={values.name}
             placeholder="e.g. Production DB"
             onChange={(e) => handleTopLevelChange("name", e.target.value)}
           />
@@ -345,6 +360,7 @@ function ConnectionDetailsForm({
         <div className="space-y-2 col-span-2">
           <Label htmlFor="description">Description</Label>
           <Input
+            value={values.description ?? ""}
             id="description"
             placeholder="Optional notes or environment context"
             onChange={(e) =>
@@ -361,6 +377,7 @@ function ConnectionDetailsForm({
         <div className="space-y-2">
           <Label htmlFor="host">Host</Label>
           <Input
+            value={values.connection.host}
             id="host"
             placeholder="e.g. localhost or db.example.com"
             onChange={(e) => handleConnectionChange("host", e.target.value)}
@@ -370,6 +387,7 @@ function ConnectionDetailsForm({
         <div className="space-y-2">
           <Label htmlFor="port">Port</Label>
           <Input
+            value={values.connection.port}
             id="port"
             type="number"
             placeholder="e.g. 5432"
@@ -382,6 +400,7 @@ function ConnectionDetailsForm({
         <div className="space-y-2">
           <Label htmlFor="database">Database Name</Label>
           <Input
+            value={values.connection.database}
             id="database"
             placeholder="e.g. app_prod"
             onChange={(e) => handleConnectionChange("database", e.target.value)}
@@ -391,15 +410,17 @@ function ConnectionDetailsForm({
         <div className="space-y-2">
           <Label htmlFor="username">Username</Label>
           <Input
+            value={values.connection.user}
             id="username"
             placeholder="e.g. admin"
-            onChange={(e) => handleConnectionChange("username", e.target.value)}
+            onChange={(e) => handleConnectionChange("user", e.target.value)}
           />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
           <Input
+            value={values.connection.password as string}
             id="password"
             type="password"
             placeholder="••••••••"
@@ -409,6 +430,7 @@ function ConnectionDetailsForm({
 
         <div className="space-y-1 flex items-center gap-2 col-span-2">
           <Switch
+            checked={(values.connection.ssl as boolean) ?? false}
             id="ssl"
             defaultChecked
             onCheckedChange={(v) => handleConnectionChange("ssl", v)}

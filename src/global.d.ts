@@ -11,6 +11,8 @@ interface DbAPI {
   testConnection: (
     db: Omit<Database, "id">
   ) => Promise<{ success: boolean; error: string }>;
+  connect: (db: Database) => Promise<void>;
+  disconnect: (db: Database) => Promise<void>;
 }
 
 interface SettingsAPI {

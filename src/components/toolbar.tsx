@@ -1,12 +1,14 @@
 import {
+  Database,
   FileCode,
   Loader2,
   LucideProps,
+  Search,
   Settings,
   Sparkles,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import AddDatabaseButton from "./addDatabaseButton";
+import AddDatabaseButton, { AddDatabaseDialog } from "./addDatabaseButton";
 import {
   Dialog,
   DialogContent,
@@ -18,8 +20,17 @@ import { Switch } from "./ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { Input } from "./ui/input";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { SetStateAction, useEffect, useState } from "react";
 import { Settings as SettingsType } from "@/types";
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "./ui/command";
 
 export default function Toolbar() {
   return (
@@ -34,7 +45,8 @@ export default function Toolbar() {
       <div className="text-center text-xs text-zinc-400 font-mono">
         tome 0.0.0
       </div>
-      <div className="flex justify-end">
+      <div className="flex gap-2 justify-end">
+        <NavCmdButton />
         <SettingsDialog>
           <Button size="xs">
             <Settings className="size-4" />
@@ -45,7 +57,15 @@ export default function Toolbar() {
   );
 }
 
-function SettingsDialog({ children }: { children: React.ReactNode }) {
+function SettingsDialog({
+  children,
+  open,
+  onOpenChange,
+}: {
+  open?: boolean;
+  onOpenChange?: React.Dispatch<SetStateAction<boolean>>;
+  children?: React.ReactNode;
+}) {
   const [selectedPage, setSelectedPage] =
     useState<"AI Features">("AI Features");
 
@@ -67,7 +87,7 @@ function SettingsDialog({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger>{children}</DialogTrigger>
       <DialogContent className="dark max-w-2xl">
         <DialogTitle>Settings</DialogTitle>
@@ -192,5 +212,85 @@ function AIFeaturesSettingsPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+function NavCmdButton() {
+  const [cmdOpen, setCmdOpen] = useState(false);
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setCmdOpen((open) => !open);
+      }
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
+
+  return (
+    <>
+      <NavCmd open={cmdOpen} onOpenChange={setCmdOpen} />
+      <Button onClick={() => setCmdOpen(true)} size="xs">
+        <Search /> Search <Kbd cmd="⌘K" />
+      </Button>
+    </>
+  );
+}
+
+export function Kbd({ cmd }: { cmd: string }) {
+  return (
+    <span className="text-xs border-2 border-zinc-800 bg-zinc-950 bg-gradient-to-b from-zinc-700 text-zinc-300 px-1 py-0.5 rounded-sm w-fit">
+      {cmd}
+    </span>
+  );
+}
+
+function NavCmd(props: {
+  open?: boolean;
+  onOpenChange?: React.Dispatch<SetStateAction<boolean>>;
+}) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [addDatabaseOpen, setAddDatabaseOpen] = useState(false);
+  return (
+    <>
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <AddDatabaseDialog open={addDatabaseOpen} setOpen={setAddDatabaseOpen} />
+      <CommandDialog
+        {...props}
+        className="rounded-lg border shadow-md w-[34rem] dark"
+      >
+        <CommandInput placeholder="Type a command or search..." />
+        <CommandList>
+          <CommandEmpty>No results found.</CommandEmpty>
+          <CommandGroup heading="Suggestions">
+            <CommandItem
+              onSelect={() => {
+                setAddDatabaseOpen(true);
+                if (props.onOpenChange) {
+                  props.onOpenChange(false);
+                }
+              }}
+            >
+              <Database />
+              <span>Add Database</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setSettingsOpen(true);
+                if (props.onOpenChange) {
+                  props.onOpenChange(false);
+                }
+              }}
+            >
+              <Settings />
+              <span>Settings</span>
+            </CommandItem>
+          </CommandGroup>
+          <CommandSeparator />
+        </CommandList>
+      </CommandDialog>
+    </>
   );
 }

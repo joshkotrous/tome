@@ -37,6 +37,9 @@ contextBridge.exposeInMainWorld("db", {
     ipcRenderer.invoke("db:createDatabase", values),
   testConnection: (db: Omit<Database, "id">) =>
     ipcRenderer.invoke("db:testConnection", db),
+  connect: (db: Database) => ipcRenderer.invoke("db:connect", db),
+  disconnect: (db: Database) => ipcRenderer.invoke("db:disconnect", db),
+  listActiveConnections: () => ipcRenderer.invoke("db:listActiveConnections"),
 });
 
 contextBridge.exposeInMainWorld("settings", {

@@ -1,17 +1,12 @@
+import { ConnectionConfig as MYSQLConnection } from "mysql";
+import { ConnectionConfig as PGConnection } from "pg";
 import { z } from "zod";
 
 export const DatabaseEngineObject = z.enum(["Postgres", "MySQL", "SQLite"]);
 
 export type DatabaseEngine = z.infer<typeof DatabaseEngineObject>;
 
-export type Connection = {
-  host: string;
-  port: number;
-  database: string;
-  username: string;
-  password: string;
-  ssl: boolean;
-};
+export type Connection = PGConnection | MYSQLConnection;
 
 export type Database = {
   id: number;

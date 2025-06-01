@@ -7,6 +7,7 @@ import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Textarea } from "./ui/textarea";
+import { Kbd } from "./toolbar";
 
 export default function SqlEditor() {
   const [query, setQuery] = useState("");
@@ -74,7 +75,15 @@ export default function SqlEditor() {
     <div className=" flex-1 min-h-0 size-full bg-zinc-950 rounded-t-md flex flex-col">
       <div className="border-b">
         <div className="min-w-30 p-1 h-8 text-[0.7rem] border w-fit pl-3 pr-2 flex gap-2 justify-between items-center font-mono">
-          (untitled) <X className="size-3 hover:text-red-500 transition-all" />
+          (untitled)
+          <Tooltip delayDuration={700}>
+            <TooltipTrigger>
+              <X className="size-3 hover:text-red-500 transition-all" />
+            </TooltipTrigger>
+            <TooltipContent>
+              Close file <Kbd cmd="⌘W" />
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
       <div className="w-full border-b border-zinc-800 p-2 font-mono text-xs text-zinc-500 flex items-center gap-2">
@@ -86,7 +95,9 @@ export default function SqlEditor() {
                 <Play className="size-3.5 text-green-500" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Run query (cmd + r)</TooltipContent>
+            <TooltipContent>
+              Run query <Kbd cmd="⌘R" />
+            </TooltipContent>
           </Tooltip>
           <Tooltip delayDuration={700}>
             <TooltipTrigger>
@@ -94,7 +105,9 @@ export default function SqlEditor() {
                 <RefreshCcw className="size-3.5 text-amber-500" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Clear query (cmd + c)</TooltipContent>
+            <TooltipContent>
+              Clear query <Kbd cmd="⌘C" />
+            </TooltipContent>
           </Tooltip>
           <GenerateQueryPopover>
             <Tooltip delayDuration={700}>
@@ -103,7 +116,9 @@ export default function SqlEditor() {
                   <Sparkles className="size-3.5 text-purple-500" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Generate query (cmd + g)</TooltipContent>
+              <TooltipContent>
+                Generate query <Kbd cmd="⌘G" />
+              </TooltipContent>
             </Tooltip>
           </GenerateQueryPopover>
         </div>

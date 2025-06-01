@@ -11,9 +11,12 @@ import {
   updateSettings,
 } from "../core/settings";
 import {
+  connect,
   createDatabase,
   deleteDatabases,
+  disconnect,
   getDatabase,
+  listActive,
   listDatabases,
   testConnection,
   // testConnection,
@@ -200,3 +203,31 @@ ipcMain.handle(
     }
   }
 );
+
+ipcMain.handle("db:connect", async (_event, db: DatabaseType) => {
+  try {
+    await connect(db);
+  } catch (err) {
+    console.error("Failed to connect to database:", err);
+    throw err;
+  }
+});
+
+ipcMain.handle("db:disconnect", async (_event, db: DatabaseType) => {
+  try {
+    await disconnect(db);
+  } catch (err) {
+    console.error("Failed to disconnect from database:", err);
+    throw err;
+  }
+});
+
+ipcMain.handle("db:listActiveConnections", async () => {
+  try {
+    const active = listActive();
+    return active;
+  } catch (err) {
+    console.error("Failed to list active connections:", err);
+    throw err;
+  }
+});
