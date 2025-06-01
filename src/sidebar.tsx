@@ -1,8 +1,7 @@
-import { Database as DatabaseIcon, SidebarClose } from "lucide-react";
+import { Database, SidebarClose } from "lucide-react";
 import { Button } from "./ui/button";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import ResizableContainer from "./ui/resizableContainer";
-import { Database } from "@/types";
 
 export default function Sidebar() {
   const [open, setOpen] = useState(true);
@@ -14,9 +13,9 @@ export default function Sidebar() {
   return (
     <ResizableContainer
       direction="horizontal"
-      defaultSize={250}
+      defaultSize={224}
       minSize={60}
-      maxSize={500}
+      maxSize={800}
       snapThreshold={60}
       isCollapsed={!open}
       onCollapsedChange={(collapsed) => setOpen(!collapsed)}
@@ -26,7 +25,7 @@ export default function Sidebar() {
       {open && (
         <div className="w-full flex justify-between items-center p-1.5 border-b border-zinc-800">
           <div className="text-sm flex gap-1.5 items-center">
-            <DatabaseIcon className="size-4" /> Databases
+            <Database className="size-4" /> Databases
           </div>
         </div>
       )}
@@ -48,33 +47,16 @@ export default function Sidebar() {
 }
 
 function DatabaseList() {
-  const [databases, setDatabases] = useState<Database[]>([]);
-
-  useEffect(() => {
-    async function fetchDatabases() {
-      try {
-        const data = await window.db.listDatabases();
-        console.log("DBs", data);
-        setDatabases(data);
-      } catch (err) {
-        console.error("Failed to load databases:", err);
-      }
-    }
-
-    fetchDatabases();
-  }, []);
-
+  const databases: string[] = ["", ""];
   return (
     <>
-      {databases.map((item, index) => (
-        <DatabaseListItem item={item} key={index} />
+      {databases.map((_, index) => (
+        <DatabaseListItem key={index} />
       ))}
     </>
   );
 }
 
-function DatabaseListItem({ item }: { item: Database }) {
-  return (
-    <div className="w-full border-b border-zinc-800 px-2 p-1">{item.name}</div>
-  );
+function DatabaseListItem() {
+  return <div className="w-full border-b border-zinc-800">test</div>;
 }

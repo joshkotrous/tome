@@ -19,7 +19,7 @@ export default function BottomBar() {
       snapThreshold={60}
       isCollapsed={!open}
       onCollapsedChange={(collapsed) => setOpen(!collapsed)}
-      className="bg-zinc-900 border border-zinc-800 rounded-t-md"
+      className="bg-zinc-900 border-t border-zinc-800 rounded-t-md"
       collapsedSize={30}
     >
       <div className="border-b w-full flex justify-end">
@@ -35,7 +35,7 @@ export default function BottomBar() {
       {open && (
         <div className="top-10 w-full flex justify-between items-center p-1.5 border-b border-zinc-800">
           <div className="text-sm flex gap-1.5 items-center">
-            <Button className="">
+            <Button size="xs" className="">
               <FileOutput className="size-4" /> Export
             </Button>
           </div>
