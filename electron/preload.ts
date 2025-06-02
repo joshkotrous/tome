@@ -40,6 +40,12 @@ contextBridge.exposeInMainWorld("db", {
   connect: (db: Database) => ipcRenderer.invoke("db:connect", db),
   disconnect: (db: Database) => ipcRenderer.invoke("db:disconnect", db),
   listActiveConnections: () => ipcRenderer.invoke("db:listActiveConnections"),
+  listRemoteDatabases: (db: Database) =>
+    ipcRenderer.invoke("db:listRemoteDatabases", db),
+  listSchemas: (db: Database, targetDb?: string) =>
+    ipcRenderer.invoke("db:listSchemas", db, targetDb),
+  listSchemaTables: (db: Database, targetSchema: string, targetDb?: string) =>
+    ipcRenderer.invoke("db:listSchemaTables", db, targetSchema, targetDb),
 });
 
 contextBridge.exposeInMainWorld("settings", {

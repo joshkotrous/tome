@@ -27,16 +27,16 @@ export async function initializeSettings(): Promise<string> {
 export async function getSettings(): Promise<Settings> {
   const settingsContent = await fs.readFile(settingsPath, "utf-8");
   const parsed = JSON.parse(settingsContent);
-  let settings = SettingsObject.parse(parsed);
-  if (settings.aiFeatures.apiKey) {
-    const decryptedValue = await decrypt(settings.aiFeatures.apiKey);
-    settings = {
-      aiFeatures: {
-        ...settings.aiFeatures,
-        apiKey: decryptedValue,
-      },
-    };
-  }
+  const settings = SettingsObject.parse(parsed);
+  // if (settings.aiFeatures.apiKey) {
+  //   const decryptedValue = await decrypt(settings.aiFeatures.apiKey);
+  //   settings = {
+  //     aiFeatures: {
+  //       ...settings.aiFeatures,
+  //       apiKey: decryptedValue,
+  //     },
+  //   };
+  // }
   return settings;
 }
 

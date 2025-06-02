@@ -20,12 +20,13 @@ import {
   DatabaseEngineObject,
 } from "@/types";
 import PostgresLogo from "./logos/postgres";
+import { useAppData } from "@/applicationDataProvider";
 
 export default function AddDatabaseButton() {
   return (
     <AddDatabaseDialog>
       <Button size="xs">
-        <DatabaseIcon className="size-4" /> Add Database
+        <DatabaseIcon className="size-4" /> Add Connection
       </Button>
     </AddDatabaseDialog>
   );
@@ -42,6 +43,7 @@ export function AddDatabaseDialog({
   open?: boolean;
   setOpen?: React.Dispatch<SetStateAction<boolean>>;
 }) {
+  const { refreshDatabases } = useAppData();
   const [step, setStep] = useState<AddDatabaseStep>("engine");
   const [database, setDatabase] = useState<Omit<Database, "id">>({
     connection: {
@@ -103,6 +105,7 @@ export function AddDatabaseDialog({
     if (setOpen) {
       setOpen(false);
     }
+    refreshDatabases();
   }
 
   useEffect(() => {
@@ -128,7 +131,7 @@ export function AddDatabaseDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="dark max-w-2xl">
-        <DialogTitle>Add Database</DialogTitle>
+        <DialogTitle>Add Connection</DialogTitle>
         <DialogDescription>
           Configure a new database connection
         </DialogDescription>
@@ -150,21 +153,23 @@ export function AddDatabaseDialog({
               </Button>
             )}
             {step === "connection" && (
-              <Button
-                disabled={
-                  !database.engine ||
-                  !database.connection.database ||
-                  !database.connection.password ||
-                  !database.connection.port ||
-                  !database.connection.user ||
-                  !database.connection.host
-                }
-                onClick={() => saveDatabase(database)}
-                variant="secondary"
-              >
-                Save Connection
-                {loading && <Loader2 className="size-4 animate-spin" />}
-              </Button>
+              <DialogClose>
+                <Button
+                  disabled={
+                    !database.engine ||
+                    !database.connection.database ||
+                    !database.connection.password ||
+                    !database.connection.port ||
+                    !database.connection.user ||
+                    !database.connection.host
+                  }
+                  onClick={() => saveDatabase(database)}
+                  variant="secondary"
+                >
+                  Save Connection
+                  {loading && <Loader2 className="size-4 animate-spin" />}
+                </Button>
+              </DialogClose>
             )}
           </div>
         </div>

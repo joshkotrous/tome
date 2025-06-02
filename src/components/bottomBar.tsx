@@ -1,6 +1,6 @@
 import { FileOutput, Minus } from "lucide-react";
 import { Button } from "./ui/button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ResizableContainer from "./ui/resizableContainer";
 
 export default function BottomBar() {
@@ -9,6 +9,19 @@ export default function BottomBar() {
   function handleOpen() {
     setOpen(!open);
   }
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      // ctrl = e.metaKey
+      // cmd = e.ctrlKey
+      if (e.key === "o" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setOpen((open) => !open);
+      }
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
 
   return (
     <ResizableContainer

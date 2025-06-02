@@ -1,5 +1,6 @@
 import {
   Database,
+  DatabaseIcon,
   FileCode,
   Loader2,
   LucideProps,
@@ -31,6 +32,8 @@ import {
   CommandList,
   CommandSeparator,
 } from "./ui/command";
+import { useAppData } from "@/applicationDataProvider";
+import { useDB } from "@/databaseConnectionProvider";
 
 export default function Toolbar() {
   return (
@@ -251,6 +254,8 @@ function NavCmd(props: {
   open?: boolean;
   onOpenChange?: React.Dispatch<SetStateAction<boolean>>;
 }) {
+  const { databases } = useAppData();
+  const { connect } = useDB();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addDatabaseOpen, setAddDatabaseOpen] = useState(false);
   return (
@@ -274,7 +279,7 @@ function NavCmd(props: {
               }}
             >
               <Database />
-              <span>Add Database</span>
+              <span>Add Connection</span>
             </CommandItem>
             <CommandItem
               onSelect={() => {
@@ -287,6 +292,21 @@ function NavCmd(props: {
               <Settings />
               <span>Settings</span>
             </CommandItem>
+          </CommandGroup>
+          <CommandGroup heading="Databases">
+            {databases.map((i) => (
+              <CommandItem
+                onSelect={() => {
+                  connect(i);
+                  if (props.onOpenChange) {
+                    props.onOpenChange(false);
+                  }
+                }}
+              >
+                <DatabaseIcon />
+                Connect to {i.name}
+              </CommandItem>
+            ))}
           </CommandGroup>
           <CommandSeparator />
         </CommandList>

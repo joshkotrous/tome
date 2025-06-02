@@ -18,6 +18,9 @@ import {
   getDatabase,
   listActive,
   listDatabases,
+  listRemoteDatabases,
+  listSchemas,
+  listSchemaTables,
   testConnection,
   // testConnection,
   updateDatabase,
@@ -175,7 +178,7 @@ ipcMain.handle("settings:getSettings", async () => {
     const settings = await getSettings();
     return settings;
   } catch (err) {
-    console.error("Failed to create settings:", err);
+    console.error("Failed to get settings:", err);
     throw err;
   }
 });
@@ -231,3 +234,38 @@ ipcMain.handle("db:listActiveConnections", async () => {
     throw err;
   }
 });
+
+ipcMain.handle("db:listRemoteDatabases", async (_event, db: DatabaseType) => {
+  try {
+    const remotes = await listRemoteDatabases(db);
+    return remotes;
+  } catch (error) {
+    console.error("Failed to list remote databases", error);
+    throw error;
+  }
+});
+
+ipcMain.handle(
+  "db:listSchemas",
+  async (_event, db: DatabaseType, targetDb?: string) => {
+    try {
+      const schemas = await listSchemas(db, targetDb);
+      return schemas;
+    } catch (error) {
+      console.error("Failed to list schemas", error);
+      throw error;
+    }
+  }
+);
+ipcMain.handle(
+  "db:listSchemaTables",
+  async (_event, db: DatabaseType, targetSchema: string, targetDb?: string) => {
+    try {
+      const tables = await listSchemaTables(db, targetSchema, targetDb);
+      return tables;
+    } catch (error) {
+      console.error("Failed to list tables for ", targetSchema, error);
+      throw error;
+    }
+  }
+);

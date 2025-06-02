@@ -1,3 +1,4 @@
+import { TableDef } from "core/database";
 import { Database, Settings } from "./types";
 
 export {};
@@ -13,6 +14,13 @@ interface DbAPI {
   ) => Promise<{ success: boolean; error: string }>;
   connect: (db: Database) => Promise<void>;
   disconnect: (db: Database) => Promise<void>;
+  listRemoteDatabases: (db: Database) => Promise<string[]>;
+  listSchemas: (db: Database, targetDb?: string) => Promise<string[]>;
+  listSchemaTables: (
+    db: Database,
+    targetSchema: string,
+    targetDb?: string
+  ) => Promise<TableDef[]>;
 }
 
 interface SettingsAPI {

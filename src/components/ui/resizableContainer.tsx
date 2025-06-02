@@ -123,11 +123,11 @@ export default function ResizableContainer({
   // Calculate resize handle classes
   const resizeHandleClasses = isHorizontal
     ? cn(
-        "absolute top-0 right-0 w-2 h-full cursor-col-resize hover:bg-zinc-600/50 transition-colors duration-150",
+        "absolute top-0 right-0 w-2 h-full cursor-col-resize hover:bg-zinc-600/50 transition-colors duration-150 z-20",
         isDragging && "bg-zinc-500/70"
       )
     : cn(
-        "absolute top-0 left-0 w-full h-2 cursor-row-resize hover:bg-zinc-600/50 transition-colors duration-150 z-10",
+        "absolute top-0 left-0 w-full h-2 cursor-row-resize hover:bg-zinc-600/50 transition-colors duration-150 z-20",
         isDragging && "bg-zinc-500/70"
       );
 
@@ -147,52 +147,5 @@ export default function ResizableContainer({
         <div className={resizeHandleClasses} onMouseDown={handleMouseDown} />
       )}
     </div>
-  );
-}
-
-// Example usage components
-export function ResizableSidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  return (
-    <ResizableContainer
-      direction="horizontal"
-      defaultSize={224}
-      minSize={160}
-      maxSize={400}
-      snapThreshold={160}
-      isCollapsed={isCollapsed}
-      onCollapsedChange={setIsCollapsed}
-      className="bg-zinc-900 border border-zinc-800 h-full rounded-r-md"
-      collapsedSize={40}
-    >
-      <div className="p-4">
-        <h3 className="text-white">Sidebar Content</h3>
-        {!isCollapsed && <p className="text-zinc-400">Resizable sidebar</p>}
-      </div>
-    </ResizableContainer>
-  );
-}
-
-export function ResizablePanel() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  return (
-    <ResizableContainer
-      direction="vertical"
-      defaultSize={200}
-      minSize={100}
-      maxSize={400}
-      snapThreshold={120}
-      isCollapsed={isCollapsed}
-      onCollapsedChange={setIsCollapsed}
-      className="bg-zinc-800 border border-zinc-700 w-full rounded-md"
-      collapsedSize={30}
-    >
-      <div className="p-4">
-        <h3 className="text-white">Panel Content</h3>
-        {!isCollapsed && <p className="text-zinc-400">Resizable panel</p>}
-      </div>
-    </ResizableContainer>
   );
 }

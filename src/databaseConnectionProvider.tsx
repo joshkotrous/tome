@@ -11,7 +11,7 @@ import React, {
 import { Database } from "./types";
 
 interface DBConnectionCtxValue {
-  connected: Database[]; // ← many, not one
+  connected: Database[];
   loading: boolean;
   error: string | null;
   setError: React.Dispatch<SetStateAction<string | null>>;
@@ -23,9 +23,11 @@ const DBConnectionContext = createContext<DBConnectionCtxValue | undefined>(
   undefined
 );
 
-export const DBConnectionProvider: React.FC<{ children: React.ReactNode }> = ({
+export function DBConnectionProvider({
   children,
-}) => {
+}: {
+  children: React.ReactNode;
+}) {
   const [connected, setConnected] = useState<Database[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +52,6 @@ export const DBConnectionProvider: React.FC<{ children: React.ReactNode }> = ({
     [connected]
   );
 
-  /* ---------- disconnect ----------------------------------------- */
   const disconnect = useCallback(
     async (db: Database) => {
       if (!connected.some((c) => c.id === db.id)) return;
@@ -87,7 +88,7 @@ export const DBConnectionProvider: React.FC<{ children: React.ReactNode }> = ({
       {children}
     </DBConnectionContext.Provider>
   );
-};
+}
 
 export function useDB() {
   const ctx = useContext(DBConnectionContext);
