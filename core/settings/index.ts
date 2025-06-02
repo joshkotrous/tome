@@ -27,30 +27,34 @@ export async function initializeSettings(): Promise<string> {
 export async function getSettings(): Promise<Settings> {
   const settingsContent = await fs.readFile(settingsPath, "utf-8");
   const parsed = JSON.parse(settingsContent);
-  const settings = SettingsObject.parse(parsed);
-  // if (settings.aiFeatures.apiKey) {
-  //   const decryptedValue = await decrypt(settings.aiFeatures.apiKey);
-  //   settings = {
-  //     aiFeatures: {
-  //       ...settings.aiFeatures,
-  //       apiKey: decryptedValue,
-  //     },
-  //   };
-  // }
+  let settings = SettingsObject.parse(parsed);
+  if (settings.aiFeatures.apiKey) {
+    const decryptedValue = await decrypt(settings.aiFeatures.apiKey);
+    settings = {
+      aiFeatures: {
+        ...settings.aiFeatures,
+        apiKey: decryptedValue,
+      },
+    };
+  }
   return settings;
 }
 
 export async function updateSettings(settings: Settings): Promise<Settings> {
   if (settings.aiFeatures.apiKey) {
     const encryptedKey = await encrypt(settings.aiFeatures.apiKey);
-    settings = {
+    const encryptedSettings = {
       aiFeatures: {
         ...settings.aiFeatures,
         apiKey: encryptedKey,
       },
     };
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify(encryptedSettings, null, 2)
+    );
+    return settings;
   }
   await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
-
   return settings;
 }

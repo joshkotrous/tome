@@ -2,7 +2,7 @@ import { db } from "../../electron/main";
 import * as schema from "../../db/schema";
 import { Connection, Database } from "../../src/types";
 import { eq, inArray } from "drizzle-orm";
-import { Client, Pool as PgPool } from "pg";
+import { Client, Pool as PgPool, QueryResult } from "pg";
 import { ConnectionConfig as MYSQLConnection } from "mysql";
 import { ConnectionConfig as PGConnection } from "pg";
 
@@ -132,39 +132,86 @@ export async function disconnect(db: Database): Promise<void> {
 export function listActive(): Database[] {
   return [...connections.values()].map((e) => e.db);
 }
+export interface JsonQueryResult {
+  /** ordered list of column names, e.g. ["id", "name", …]            */
+  columns: string[];
+  /** array of row objects                                             */
+  rows: any[];
+  /** convenience duplicate of rows.length (or pg’s rowCount)          */
+  rowCount: number;
+}
+
+function toJsonResult(
+  engine: Database["engine"],
+  result: any
+): JsonQueryResult {
+  switch (engine) {
+    case "Postgres": {
+      const pgRes = result as QueryResult<any>;
+      return {
+        columns: pgRes.fields.map((f) => f.name),
+        rows: pgRes.rows,
+        rowCount: pgRes.rowCount ?? 0,
+      };
+    }
+
+    case "MySQL": {
+      const [rows, fields] = result as [any[], mysql.FieldInfo[]];
+      return {
+        columns: fields.map((f) => f.name),
+        rows,
+        rowCount: rows.length,
+      };
+    }
+
+    case "SQLite": {
+      const rows = result as any[];
+      return {
+        columns: rows.length ? Object.keys(rows[0]) : [],
+        rows,
+        rowCount: rows.length,
+      };
+    }
+
+    default:
+      throw new Error(`Unsupported engine ${engine as string}`);
+  }
+}
 
 export async function query(
-  db: Database, // which DB to run against
+  db: Database,
   sql: string,
   params: any[] = []
-) {
-  let entry = connections.get(db.id);
-  if (!entry) {
-    entry = await connect(db);
-  }
-
+): Promise<JsonQueryResult> {
+  const entry = connections.get(db.id) ?? (await connect(db));
   const { driver } = entry;
 
   switch (db.engine) {
+    /* --------------------------- POSTGRES -------------------------- */
     case "Postgres": {
-      // pg returns { rows, rowCount, … }
-      return (driver as PgPool).query(sql, params);
+      const native = await (driver as PgPool).query(sql, params);
+      return toJsonResult("Postgres", native);
     }
 
-    //   case "MySQL": {
-    //     // mysql2 returns [rows, fields]
-    //     const [rows] = await (driver as mysql.Connection).execute(sql, params);
-    //     return rows;
-    //   }
+    /* ---------------------------- MYSQL ---------------------------- */
+    case "MySQL": {
+      const native = await new Promise<any>((resolve, reject) =>
+        (driver as mysql.Connection).query(sql, params, (err, rows, fields) =>
+          err ? reject(err) : resolve([rows, fields])
+        )
+      );
+      return toJsonResult("MySQL", native);
+    }
 
-    //   case "SQLite": {
-    //     // better-sqlite3 is synchronous; wrap so caller always gets a Promise
-    //     const stmt = (driver as sqlite3.Database).prepare(sql);
-    //     const rows = Array.isArray(params) && params.length
-    //       ? stmt.all(...params)
-    //       : stmt.all();
-    //     return rows;
-    //   }
+    /* --------------------------- SQLITE --------------------------- */
+    case "SQLite": {
+      const stmt = (driver as any).prepare(sql);
+      const native =
+        Array.isArray(params) && params.length
+          ? stmt.all(...params)
+          : stmt.all();
+      return toJsonResult("SQLite", native);
+    }
 
     default:
       throw new Error(`Unsupported engine ${db.engine as string}`);

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import MonacoEditor, { OnMount } from "@monaco-editor/react";
 
 import * as monacoEditor from "monaco-editor";
@@ -8,16 +8,41 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Textarea } from "./ui/textarea";
 import { Kbd, NewQueryButton } from "./toolbar";
-import { useQueryData } from "@/queryDataProvider";
+import { Query, useQueryData } from "@/queryDataProvider";
+import { useAppData } from "@/applicationDataProvider";
+import AddDatabaseButton from "./addDatabaseButton";
+import { cn } from "@/lib/utils";
+import { DBInformation } from "./sidebar";
 
 export default function SqlEditor() {
-  const { queries, currentQuery, runQuery } = useQueryData();
+  const { queries, currentQuery, runQuery, updateQuery } = useQueryData();
 
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState<Query | null>(null);
 
-  const handleChange = useCallback((value?: string) => {
-    setQuery(value ?? "");
-  }, []);
+  const { databases } = useAppData();
+
+  const handleChange = useCallback(
+    (value?: string) => {
+      // If there's a current query, update it in the queries array
+      if (currentQuery) {
+        if (query) {
+          const updatedQuery = {
+            ...query,
+            query: value ?? "",
+          };
+          updateQuery(updatedQuery);
+        }
+      }
+    },
+    [currentQuery, queries, updateQuery]
+  );
+
+  useEffect(() => {
+    const _query = queries.find((i) => i.id === currentQuery);
+    if (_query) {
+      setQuery(_query);
+    }
+  }, [queries, currentQuery]);
 
   const handleMount: OnMount = (editor, monaco) => {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () =>
@@ -74,10 +99,19 @@ export default function SqlEditor() {
     monaco.editor.setTheme("zinc-dark");
   };
 
+  if (databases.length === 0) {
+    return (
+      <div className="flex flex-1 justify-center items-center flex-col gap-2 text-zinc-400">
+        Create a connection to get started
+        <AddDatabaseButton size="default" />
+      </div>
+    );
+  }
+
   if (queries.length === 0) {
     return (
       <div className="flex flex-1 justify-center items-center flex-col gap-2 text-zinc-400">
-        Create a Query to Get Started
+        Create a query to get started
         <NewQueryButton size="default" />
       </div>
     );
@@ -85,7 +119,17 @@ export default function SqlEditor() {
 
   async function handleRunQuery() {
     if (currentQuery) {
-      await runQuery(currentQuery);
+      if (query) {
+        await runQuery(query);
+      }
+    }
+  }
+
+  async function handleClearQuery() {
+    if (currentQuery) {
+      if (query) {
+        updateQuery({ ...query, query: "" });
+      }
     }
   }
 
@@ -93,7 +137,7 @@ export default function SqlEditor() {
     <div className=" flex-1 min-h-0 size-full bg-zinc-950 rounded-t-md flex flex-col">
       <QueryTabs />
       <div className="w-full border-b border-zinc-800 p-2 font-mono text-xs text-zinc-500 flex items-center gap-2">
-        db info
+        {query && <DBInformation db={query.connection} />}
         <div className="flex items-center gap-1">
           <Tooltip delayDuration={700}>
             <TooltipTrigger>
@@ -111,7 +155,11 @@ export default function SqlEditor() {
           </Tooltip>
           <Tooltip delayDuration={700}>
             <TooltipTrigger>
-              <Button variant="ghost" className="has-[>svg]:p-1.5 h-fit">
+              <Button
+                onClick={() => handleClearQuery()}
+                variant="ghost"
+                className="has-[>svg]:p-1.5 h-fit"
+              >
                 <RefreshCcw className="size-3.5 text-amber-500" />
               </Button>
             </TooltipTrigger>
@@ -138,7 +186,7 @@ export default function SqlEditor() {
         height="100%"
         defaultLanguage="sql"
         theme="zinc-dark"
-        value={currentQuery?.query}
+        value={queries.find((i) => i.id === currentQuery)?.query ?? ""}
         onChange={handleChange}
         onMount={handleMount}
         options={{
@@ -154,28 +202,35 @@ export default function SqlEditor() {
 }
 
 function QueryTabs() {
-  const { queries, deleteQuery, setCurrrentQuery } = useQueryData();
+  const { queries, deleteQuery, setCurrrentQuery, currentQuery } =
+    useQueryData();
   return (
     <div className="border-b flex overflow-x-auto min-h-8">
-      {queries.map((i) => (
-        <div
-          onClick={() => setCurrrentQuery(i)}
-          className="min-w-30 p-1 h-8 text-[0.7rem] border w-fit pl-3 pr-2 flex gap-2 justify-between items-center font-mono"
-        >
-          {i.connection.name}
-          <Tooltip delayDuration={700}>
-            <TooltipTrigger>
-              <X
-                onClick={() => deleteQuery(i)}
-                className="size-3 hover:text-red-500 transition-all"
-              />
-            </TooltipTrigger>
-            <TooltipContent>
-              Close file <Kbd cmd="⌘W" />
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      ))}
+      {queries.map((i) => {
+        const selected = currentQuery === i.id;
+        return (
+          <div
+            onClick={() => setCurrrentQuery(i.id)}
+            className={cn(
+              "min-w-30 p-1 h-8 text-[0.7rem] border w-fit pl-3 pr-2 flex gap-2 justify-between items-center font-mono transition-all",
+              selected && "bg-zinc-800/75"
+            )}
+          >
+            {i.connection.name}
+            <Tooltip delayDuration={700}>
+              <TooltipTrigger>
+                <X
+                  onClick={() => deleteQuery(i)}
+                  className="size-3 hover:text-red-500 transition-all"
+                />
+              </TooltipTrigger>
+              <TooltipContent>
+                Close file <Kbd cmd="⌘W" />
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        );
+      })}
     </div>
   );
 }

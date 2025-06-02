@@ -158,16 +158,7 @@ function ConnectionListItem({
   selected: Database | null;
   setSelected: React.Dispatch<SetStateAction<Database | null>>;
 }) {
-  const { connected, loading } = useDB();
-
   const [open, setOpen] = useState(false);
-
-  function displayLogo(engine: DatabaseEngine) {
-    switch (engine) {
-      case "Postgres":
-        return <PostgresLogo className="size-3" />;
-    }
-  }
 
   return (
     <>
@@ -186,17 +177,7 @@ function ConnectionListItem({
                 "w-full w-fit border-zinc-800 px-2 p-1 transition-all flex gap-1 items-center text-sm text-nowrap"
               )}
             >
-              {loading && <Spinner />}
-              {connected.some((i) => i.id === item.id) && (
-                <div>
-                  <CircleCheck className="size-3 text-green-500" />
-                </div>
-              )}
-              {displayLogo(item.engine)}
-              {item.name}
-              <span className="text-zinc-400 text-xs pl-1">
-                {item.connection.host}
-              </span>
+              <DBInformation db={item} />
             </div>
             <ChevronRight
               className={cn("size-5 text-zinc-400", open && "rotate-90")}
@@ -205,6 +186,30 @@ function ConnectionListItem({
           {open && <DatabaseList connection={item} />}
         </div>
       </ConnectionListContextMenu>
+    </>
+  );
+}
+
+export function DBInformation({ db }: { db: Database }) {
+  const { connected, loading } = useDB();
+
+  function displayLogo(engine: DatabaseEngine) {
+    switch (engine) {
+      case "Postgres":
+        return <PostgresLogo className="size-3" />;
+    }
+  }
+  return (
+    <>
+      {loading && <Spinner />}
+      {connected.some((i) => i.id === db.id) && (
+        <div>
+          <CircleCheck className="size-3 text-green-500" />
+        </div>
+      )}
+      {displayLogo(db.engine)}
+      {db.name}
+      <span className="text-zinc-400 text-xs pl-1">{db.connection.host}</span>
     </>
   );
 }

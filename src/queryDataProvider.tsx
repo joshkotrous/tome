@@ -7,19 +7,22 @@ import React, {
   useState,
 } from "react";
 import { Database } from "./types";
+import { JsonQueryResult } from "core/database";
 
-type Query = { id?: string; connection: Database; query: string };
+export type Query = { id: string; connection: Database; query: string };
 
 interface QueryDataContextValue {
-  currentQuery: Query | null;
-  setCurrrentQuery: React.Dispatch<SetStateAction<Query | null>>;
+  currentQuery: string | null;
+  setCurrrentQuery: React.Dispatch<SetStateAction<string | null>>;
   queries: Query[];
-  queryResult: string[];
+  queryResult: JsonQueryResult | null;
   loadingQuery: boolean;
+  error: string | null;
   refreshQuery: () => Promise<void>;
   runQuery: (query: Query) => Promise<void>;
   createQuery: (query: Query) => void;
   deleteQuery: (query: Query) => void;
+  updateQuery: (updatedQuery: Query) => void;
 }
 
 const QueryDataContext = createContext<QueryDataContextValue | undefined>(
@@ -27,36 +30,55 @@ const QueryDataContext = createContext<QueryDataContextValue | undefined>(
 );
 
 export function QueryDataProvider({ children }: { children: React.ReactNode }) {
-  const [currentQuery, setCurrrentQuery] = useState<Query | null>(null);
+  const [currentQuery, setCurrrentQuery] = useState<string | null>(null);
   const [queries, setQueries] = useState<Query[]>([]);
   const [loadingQuery, setLoadingQuery] = useState(false);
-  const [queryResult, setQueryResult] = useState<string[]>([]);
+  const [queryResult, setQueryResult] = useState<JsonQueryResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const runQuery = useCallback(async (query: Query) => {
-    setCurrrentQuery(query);
+    setCurrrentQuery(query.id);
     setLoadingQuery(true);
-    const result = [""];
-    setQueryResult(result);
+    setQueryResult(null);
+    setError(null);
+    try {
+      const result = await window.db.query(query.connection, query.query);
+      setQueryResult(result);
+    } catch (error: any) {
+      console.error("Failed to run query", error);
+      setError(error.message);
+    }
     setLoadingQuery(false);
   }, []);
 
   const refreshQuery = useCallback(async () => {
     if (currentQuery) {
-      await runQuery(currentQuery);
+      const query = queries.find((i) => i.id === currentQuery);
+      if (query) {
+        await runQuery(query);
+      }
     }
   }, [currentQuery, runQuery]);
 
   const createQuery = useCallback((query: Query) => {
     setQueries((queries) => [...queries, query]);
-    setCurrrentQuery(query);
+    setCurrrentQuery(query.id);
   }, []);
 
   const deleteQuery = useCallback((queryToDelete: Query) => {
     setQueries((queries) => queries.filter((query) => query !== queryToDelete));
     // If the deleted query was the current query, clear it
     setCurrrentQuery((current) => {
-      return current === queryToDelete ? null : current;
+      return current === queryToDelete.id ? null : current;
     });
+  }, []);
+
+  const updateQuery = useCallback((updatedQuery: Query) => {
+    setQueries((queries) =>
+      queries.map((query) =>
+        query.id === updatedQuery.id ? updatedQuery : query
+      )
+    );
   }, []);
 
   const value = useMemo(
@@ -70,6 +92,8 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
       runQuery,
       createQuery,
       deleteQuery,
+      error,
+      updateQuery,
     }),
     [
       currentQuery,
@@ -81,6 +105,8 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
       runQuery,
       createQuery,
       deleteQuery,
+      error,
+      updateQuery,
     ]
   );
 

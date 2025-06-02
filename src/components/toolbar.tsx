@@ -130,7 +130,7 @@ function SelectConnectionDialog({
                 connect(i);
                 const newQuery = { id: nanoid(4), connection: i, query: "" };
                 createQuery(newQuery);
-                setCurrrentQuery(newQuery);
+                setCurrrentQuery(newQuery.id);
               }}
             >
               {i.name}
@@ -148,7 +148,7 @@ function SelectConnectionDialog({
                 const newQuery = { id: nanoid(4), connection: i, query: "" };
 
                 createQuery(newQuery);
-                setCurrrentQuery(newQuery);
+                setCurrrentQuery(newQuery.id);
               }}
             >
               {i.name}

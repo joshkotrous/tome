@@ -21,6 +21,7 @@ import {
   listRemoteDatabases,
   listSchemas,
   listSchemaTables,
+  query,
   testConnection,
   // testConnection,
   updateDatabase,
@@ -265,6 +266,19 @@ ipcMain.handle(
       return tables;
     } catch (error) {
       console.error("Failed to list tables for ", targetSchema, error);
+      throw error;
+    }
+  }
+);
+
+ipcMain.handle(
+  "db:query",
+  async (_event, db: DatabaseType, sql: string, params?: any[]) => {
+    try {
+      const result = await query(db, sql, params);
+      return result;
+    } catch (error) {
+      console.error("Failed to run query ", sql, error);
       throw error;
     }
   }

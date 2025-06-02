@@ -22,10 +22,14 @@ import {
 import PostgresLogo from "./logos/postgres";
 import { useAppData } from "@/applicationDataProvider";
 
-export default function AddDatabaseButton() {
+export default function AddDatabaseButton({
+  size = "xs",
+}: {
+  size?: "default" | "xs" | "sm" | "lg" | "icon" | null | undefined;
+}) {
   return (
     <AddDatabaseDialog>
-      <Button size="xs">
+      <Button size={size}>
         <DatabaseIcon className="size-4" /> Add Connection
       </Button>
     </AddDatabaseDialog>
