@@ -7,9 +7,12 @@ import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Textarea } from "./ui/textarea";
-import { Kbd } from "./toolbar";
+import { Kbd, NewQueryButton } from "./toolbar";
+import { useQueryData } from "@/queryDataProvider";
 
 export default function SqlEditor() {
+  const { queries, currentQuery, runQuery } = useQueryData();
+
   const [query, setQuery] = useState("");
 
   const handleChange = useCallback((value?: string) => {
@@ -71,27 +74,34 @@ export default function SqlEditor() {
     monaco.editor.setTheme("zinc-dark");
   };
 
+  if (queries.length === 0) {
+    return (
+      <div className="flex flex-1 justify-center items-center flex-col gap-2 text-zinc-400">
+        Create a Query to Get Started
+        <NewQueryButton size="default" />
+      </div>
+    );
+  }
+
+  async function handleRunQuery() {
+    if (currentQuery) {
+      await runQuery(currentQuery);
+    }
+  }
+
   return (
     <div className=" flex-1 min-h-0 size-full bg-zinc-950 rounded-t-md flex flex-col">
-      <div className="border-b">
-        <div className="min-w-30 p-1 h-8 text-[0.7rem] border w-fit pl-3 pr-2 flex gap-2 justify-between items-center font-mono">
-          (untitled)
-          <Tooltip delayDuration={700}>
-            <TooltipTrigger>
-              <X className="size-3 hover:text-red-500 transition-all" />
-            </TooltipTrigger>
-            <TooltipContent>
-              Close file <Kbd cmd="⌘W" />
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
+      <QueryTabs />
       <div className="w-full border-b border-zinc-800 p-2 font-mono text-xs text-zinc-500 flex items-center gap-2">
         db info
         <div className="flex items-center gap-1">
           <Tooltip delayDuration={700}>
             <TooltipTrigger>
-              <Button variant="ghost" className="has-[>svg]:p-1.5 h-fit">
+              <Button
+                onClick={() => handleRunQuery()}
+                variant="ghost"
+                className="has-[>svg]:p-1.5 h-fit"
+              >
                 <Play className="size-3.5 text-green-500" />
               </Button>
             </TooltipTrigger>
@@ -128,7 +138,7 @@ export default function SqlEditor() {
         height="100%"
         defaultLanguage="sql"
         theme="zinc-dark"
-        value={query}
+        value={currentQuery?.query}
         onChange={handleChange}
         onMount={handleMount}
         options={{
@@ -139,6 +149,33 @@ export default function SqlEditor() {
         }}
         className="flex-1 bg-zinc-950"
       />
+    </div>
+  );
+}
+
+function QueryTabs() {
+  const { queries, deleteQuery, setCurrrentQuery } = useQueryData();
+  return (
+    <div className="border-b flex overflow-x-auto min-h-8">
+      {queries.map((i) => (
+        <div
+          onClick={() => setCurrrentQuery(i)}
+          className="min-w-30 p-1 h-8 text-[0.7rem] border w-fit pl-3 pr-2 flex gap-2 justify-between items-center font-mono"
+        >
+          {i.connection.name}
+          <Tooltip delayDuration={700}>
+            <TooltipTrigger>
+              <X
+                onClick={() => deleteQuery(i)}
+                className="size-3 hover:text-red-500 transition-all"
+              />
+            </TooltipTrigger>
+            <TooltipContent>
+              Close file <Kbd cmd="⌘W" />
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      ))}
     </div>
   );
 }

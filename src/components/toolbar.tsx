@@ -1,5 +1,4 @@
 import {
-  Database,
   DatabaseIcon,
   FileCode,
   Loader2,
@@ -22,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { Input } from "./ui/input";
 import { cn } from "@/lib/utils";
 import { SetStateAction, useEffect, useState } from "react";
-import { Settings as SettingsType } from "@/types";
+import { Database, Settings as SettingsType } from "@/types";
 import {
   CommandDialog,
   CommandEmpty,
@@ -34,16 +33,15 @@ import {
 } from "./ui/command";
 import { useAppData } from "@/applicationDataProvider";
 import { useDB } from "@/databaseConnectionProvider";
-
+import { useQueryData } from "@/queryDataProvider";
+import { nanoid } from "nanoid";
 export default function Toolbar() {
   return (
     <div className="w-full h-14 grid grid-cols-[4rem_1fr_1fr_1fr] gap-3 items-center border-b border-zinc-800 pr-3">
       <div id="mac-stoplight" className="w-10 h-full"></div>
       <div className="flex gap-2">
         <AddDatabaseButton />
-        <Button size="xs">
-          <FileCode className="size-4" /> New Query
-        </Button>
+        <NewQueryButton />
       </div>
       <div className="text-center text-xs text-zinc-400 font-mono">
         tome 0.0.0
@@ -57,6 +55,107 @@ export default function Toolbar() {
         </SettingsDialog>
       </div>
     </div>
+  );
+}
+
+export function NewQueryButton({
+  size = "xs",
+}: {
+  size?: "default" | "xs" | "sm" | "lg" | "icon" | null | undefined;
+}) {
+  const { connected } = useDB();
+  const { createQuery } = useQueryData();
+
+  const [selectConnectionOpen, setSelectConnectionOpen] = useState(false);
+  const [onlyActive, setOnlyActive] = useState(false);
+  function handleNewQuery() {
+    if (connected.length === 0) {
+      setSelectConnectionOpen(true);
+    }
+
+    if (connected.length === 1) {
+      const newQuery = { id: nanoid(4), connection: connected[0], query: "" };
+      createQuery(newQuery);
+    }
+
+    if (connected.length > 1) {
+      setOnlyActive(true);
+      setSelectConnectionOpen(true);
+    }
+  }
+
+  return (
+    <>
+      <SelectConnectionDialog
+        onlyActiveConnections={onlyActive}
+        open={selectConnectionOpen}
+        onOpenChange={setSelectConnectionOpen}
+      />
+      <Button onClick={() => handleNewQuery()} size={size}>
+        <FileCode className="size-4" /> New Query
+      </Button>
+    </>
+  );
+}
+
+function SelectConnectionDialog({
+  setSelected,
+  open,
+  onOpenChange,
+  children,
+  onlyActiveConnections,
+}: {
+  onlyActiveConnections?: boolean;
+  setSelected?: React.Dispatch<SetStateAction<Database | null>>;
+  open: boolean;
+  onOpenChange: React.Dispatch<SetStateAction<boolean>>;
+  children?: React.ReactNode;
+}) {
+  const { databases } = useAppData();
+  const { connect, connected } = useDB();
+  const { createQuery, setCurrrentQuery } = useQueryData();
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger>{children}</DialogTrigger>
+      <DialogContent className="dark">
+        <DialogTitle>Select Connection</DialogTitle>
+        {onlyActiveConnections &&
+          connected.map((i) => (
+            <div
+              onClick={() => {
+                if (setSelected) {
+                  setSelected(i);
+                }
+                onOpenChange(false);
+                connect(i);
+                const newQuery = { id: nanoid(4), connection: i, query: "" };
+                createQuery(newQuery);
+                setCurrrentQuery(newQuery);
+              }}
+            >
+              {i.name}
+            </div>
+          ))}
+        {!onlyActiveConnections &&
+          databases.map((i) => (
+            <div
+              onClick={() => {
+                if (setSelected) {
+                  setSelected(i);
+                }
+                onOpenChange(false);
+                connect(i);
+                const newQuery = { id: nanoid(4), connection: i, query: "" };
+
+                createQuery(newQuery);
+                setCurrrentQuery(newQuery);
+              }}
+            >
+              {i.name}
+            </div>
+          ))}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -278,7 +377,7 @@ function NavCmd(props: {
                 }
               }}
             >
-              <Database />
+              <DatabaseIcon />
               <span>Add Connection</span>
             </CommandItem>
             <CommandItem

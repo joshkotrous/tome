@@ -1,5 +1,6 @@
-import {
+import React, {
   createContext,
+  SetStateAction,
   useCallback,
   useContext,
   useMemo,
@@ -7,16 +8,18 @@ import {
 } from "react";
 import { Database } from "./types";
 
-type Query = { connection: Database; query: string };
+type Query = { id?: string; connection: Database; query: string };
 
 interface QueryDataContextValue {
   currentQuery: Query | null;
+  setCurrrentQuery: React.Dispatch<SetStateAction<Query | null>>;
   queries: Query[];
   queryResult: string[];
   loadingQuery: boolean;
   refreshQuery: () => Promise<void>;
   runQuery: (query: Query) => Promise<void>;
   createQuery: (query: Query) => void;
+  deleteQuery: (query: Query) => void;
 }
 
 const QueryDataContext = createContext<QueryDataContextValue | undefined>(
@@ -48,24 +51,36 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
     setCurrrentQuery(query);
   }, []);
 
+  const deleteQuery = useCallback((queryToDelete: Query) => {
+    setQueries((queries) => queries.filter((query) => query !== queryToDelete));
+    // If the deleted query was the current query, clear it
+    setCurrrentQuery((current) => {
+      return current === queryToDelete ? null : current;
+    });
+  }, []);
+
   const value = useMemo(
     () => ({
       currentQuery,
+      setCurrrentQuery,
       queries,
       loadingQuery,
       queryResult,
       refreshQuery,
       runQuery,
       createQuery,
+      deleteQuery,
     }),
     [
       currentQuery,
+      setCurrrentQuery,
       queries,
       loadingQuery,
       queryResult,
       refreshQuery,
       runQuery,
       createQuery,
+      deleteQuery,
     ]
   );
 
