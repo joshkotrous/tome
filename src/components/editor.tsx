@@ -13,6 +13,7 @@ import { useAppData } from "@/applicationDataProvider";
 import AddDatabaseButton from "./addDatabaseButton";
 import { cn } from "@/lib/utils";
 import { DBInformation } from "./sidebar";
+import ChatInterface from "./chatInterface";
 
 export default function SqlEditor() {
   const { queries, currentQuery, runQuery, updateQuery } = useQueryData();
@@ -98,6 +99,10 @@ export default function SqlEditor() {
     /* 2️⃣  Activate it */
     monaco.editor.setTheme("zinc-dark");
   };
+
+  if (true) {
+    return <ChatInterface />;
+  }
 
   if (databases.length === 0) {
     return (

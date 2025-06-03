@@ -1,38 +1,77 @@
+import { Message, StreamTextResult, Tool } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { streamText } from "ai";
-import { getSettings } from "../settings";
-import { Settings } from "../../src/types";
+import { AIProvider } from "../../src/types";
 
-export async function streamResponse() {
-  const settings = await getSettings();
-  if (!settings.aiFeatures.enabled || !settings.aiFeatures.apiKey) {
-    throw new Error("AI features are disabled or no key is configured");
-  }
-  switch (settings.aiFeatures.provider) {
-    case "Anthropic":
-      return streamAnthropic(settings);
+export type ToolMap = Record<string, Tool<any, any>>;
+
+export function streamResponse(opts: {
+  prompt?: string;
+  system?: string;
+  tools?: ToolMap;
+  apiKey: string;
+  provider: AIProvider;
+  messages?: Omit<Message, "id">[];
+}): StreamTextResult<ToolMap, never> {
+  const { prompt, tools = {} } = opts;
+
+  switch (opts.provider) {
     case "Open AI":
-      return streamOpenAi(settings);
+      return streamOpenAI(
+        opts.apiKey,
+        tools,
+        opts.system,
+        opts.messages,
+        prompt
+      );
+    case "Anthropic":
+      return streamAnthropic(
+        opts.apiKey,
+        tools,
+        opts.system,
+        opts.messages,
+        prompt
+      );
+    default:
+      throw new Error(`Unsupported provider: ${opts.provider}`);
   }
 }
 
-function streamAnthropic(settings: Settings) {
-  const myAnthropic = createAnthropic({
-    apiKey: settings.aiFeatures.apiKey,
-  });
+function streamOpenAI(
+  apiKey: string,
+  tools: ToolMap,
+  system?: string,
+  messages?: Omit<Message, "id">[],
+  prompt?: string
+): StreamTextResult<ToolMap, never> {
+  const openai = createOpenAI({ apiKey });
 
   return streamText({
-    model: myAnthropic(""),
-    prompt: "Write a poem about embedding models.",
+    model: openai("gpt-4o"),
+    prompt,
+    system,
+    tools,
+    messages,
+    maxSteps: 5,
   });
 }
 
-function streamOpenAi(settings: Settings) {
-  const myOpenAI = createOpenAI({ apiKey: settings.aiFeatures.apiKey });
+function streamAnthropic(
+  apiKey: string,
+  tools: ToolMap,
+  system?: string,
+  messages?: Omit<Message, "id">[],
+  prompt?: string
+): StreamTextResult<ToolMap, never> {
+  const anthropic = createAnthropic({ apiKey });
 
   return streamText({
-    model: myOpenAI("gpt-4-turbo"),
-    prompt: "Write a poem about embedding models.",
+    model: anthropic("claude-3-sonnet-20240229"),
+    prompt,
+    system,
+    tools,
+    messages,
+    maxSteps: 5,
   });
 }

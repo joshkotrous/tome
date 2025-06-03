@@ -20,7 +20,7 @@ import { Switch } from "./ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { Input } from "./ui/input";
 import { cn } from "@/lib/utils";
-import { SetStateAction, useEffect, useState } from "react";
+import React, { SetStateAction, useEffect, useState } from "react";
 import { Database, Settings as SettingsType } from "@/types";
 import {
   CommandDialog,
@@ -112,50 +112,66 @@ function SelectConnectionDialog({
   children?: React.ReactNode;
 }) {
   const { databases } = useAppData();
-  const { connect, connected } = useDB();
-  const { createQuery, setCurrrentQuery } = useQueryData();
+  const { connected } = useDB();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger>{children}</DialogTrigger>
-      <DialogContent className="dark">
+      <DialogContent className="dark max-w-2xl">
         <DialogTitle>Select Connection</DialogTitle>
-        {onlyActiveConnections &&
-          connected.map((i) => (
-            <div
-              onClick={() => {
-                if (setSelected) {
-                  setSelected(i);
-                }
-                onOpenChange(false);
-                connect(i);
-                const newQuery = { id: nanoid(4), connection: i, query: "" };
-                createQuery(newQuery);
-                setCurrrentQuery(newQuery.id);
-              }}
-            >
-              {i.name}
-            </div>
-          ))}
-        {!onlyActiveConnections &&
-          databases.map((i) => (
-            <div
-              onClick={() => {
-                if (setSelected) {
-                  setSelected(i);
-                }
-                onOpenChange(false);
-                connect(i);
-                const newQuery = { id: nanoid(4), connection: i, query: "" };
-
-                createQuery(newQuery);
-                setCurrrentQuery(newQuery.id);
-              }}
-            >
-              {i.name}
-            </div>
-          ))}
+        {onlyActiveConnections && (
+          <ConnectionList
+            connections={connected}
+            setSelected={setSelected}
+            onOpenChange={onOpenChange}
+          />
+        )}
+        {!onlyActiveConnections && (
+          <ConnectionList
+            setSelected={setSelected}
+            onOpenChange={onOpenChange}
+            connections={databases}
+          />
+        )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ConnectionList({
+  connections,
+  setSelected,
+  onOpenChange,
+}: {
+  connections: Database[];
+  setSelected?: React.Dispatch<SetStateAction<Database | null>>;
+  onOpenChange: React.Dispatch<SetStateAction<boolean>>;
+}) {
+  const { connect } = useDB();
+
+  const { createQuery, setCurrrentQuery } = useQueryData();
+
+  return (
+    <div className="border rounded-md overflow-hidden">
+      {connections.map((i) => (
+        <div
+          className="hover:bg-zinc-800 transition-all p-2"
+          onClick={() => {
+            if (setSelected) {
+              setSelected(i);
+            }
+            onOpenChange(false);
+            connect(i);
+            const newQuery = { id: nanoid(4), connection: i, query: "" };
+
+            createQuery(newQuery);
+            setCurrrentQuery(newQuery.id);
+          }}
+        >
+          {i.name}
+        </div>
+      ))}
+    </div>
   );
 }
 

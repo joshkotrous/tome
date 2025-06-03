@@ -19,7 +19,9 @@ interface QueryDataContextValue {
   loadingQuery: boolean;
   error: string | null;
   refreshQuery: () => Promise<void>;
-  runQuery: (query: Query) => Promise<void>;
+  runQuery: (
+    query: Query
+  ) => Promise<JsonQueryResult | undefined | { error: string }>;
   createQuery: (query: Query) => void;
   deleteQuery: (query: Query) => void;
   updateQuery: (updatedQuery: Query) => void;
@@ -44,11 +46,14 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await window.db.query(query.connection, query.query);
       setQueryResult(result);
+      return result;
     } catch (error: any) {
       console.error("Failed to run query", error);
       setError(error.message);
+      return { error: error.message };
+    } finally {
+      setLoadingQuery(false);
     }
-    setLoadingQuery(false);
   }, []);
 
   const refreshQuery = useCallback(async () => {

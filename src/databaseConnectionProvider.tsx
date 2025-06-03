@@ -15,7 +15,7 @@ interface DBConnectionCtxValue {
   loading: boolean;
   error: string | null;
   setError: React.Dispatch<SetStateAction<string | null>>;
-  connect: (db: Database) => Promise<void>;
+  connect: (db: Database) => Promise<Database | null>;
   disconnect: (db: Database) => Promise<void>;
 }
 
@@ -35,16 +35,18 @@ export function DBConnectionProvider({
   const connect = useCallback(
     async (db: Database) => {
       // already connected?
-      if (connected.some((c) => c.id === db.id)) return;
+      if (connected.some((c) => c.id === db.id)) return db;
 
       setLoading(true);
       try {
         await window.db.connect(db); // IPC bridge
         setConnected((prev) => [...prev, db]); // add to list
         setError(null);
+        return db;
       } catch (err: any) {
         console.error("DB connect failed:", err);
         setError(err?.message ?? "Unknown error");
+        return null;
       } finally {
         setLoading(false);
       }
