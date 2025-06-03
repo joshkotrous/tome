@@ -458,3 +458,61 @@ export async function listSchemaTables(
 
   throw new Error(`Unsupported engine ${db.engine as string}`);
 }
+
+export interface DatabaseSchema {
+  database: string;
+  schemas: SchemaInfo[];
+}
+
+export interface SchemaInfo {
+  name: string;
+  tables: TableDef[];
+}
+
+export async function getFullSchema(
+  db: Database,
+  targetDb?: string
+): Promise<DatabaseSchema> {
+  const databaseName = targetDb || db.connection.database || "default";
+
+  try {
+    // Get all schemas in the database
+    const schemaNames = await listSchemas(db, targetDb);
+
+    // Get tables for each schema
+    const schemas: SchemaInfo[] = [];
+
+    for (const schemaName of schemaNames) {
+      try {
+        const tables = await listSchemaTables(db, schemaName, targetDb);
+        schemas.push({
+          name: schemaName,
+          tables,
+        });
+      } catch (error) {
+        console.warn(
+          `Failed to fetch tables for schema '${schemaName}':`,
+          error
+        );
+        // Continue with other schemas even if one fails
+        schemas.push({
+          name: schemaName,
+          tables: [],
+        });
+      }
+    }
+
+    return {
+      database: databaseName,
+      schemas,
+    };
+  } catch (error) {
+    console.error(
+      `Failed to fetch full schema for database '${databaseName}':`,
+      error
+    );
+    throw new Error(
+      `Unable to retrieve schema for database '${databaseName}': ${error}`
+    );
+  }
+}

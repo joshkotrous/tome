@@ -16,6 +16,7 @@ import {
   deleteDatabases,
   disconnect,
   getDatabase,
+  getFullSchema,
   listActive,
   listDatabases,
   listRemoteDatabases,
@@ -279,6 +280,19 @@ ipcMain.handle(
       return result;
     } catch (error) {
       console.error("Failed to run query ", sql, error);
+      throw error;
+    }
+  }
+);
+
+ipcMain.handle(
+  "db:getFullSchema",
+  async (_event, db: DatabaseType, targetDb?: string) => {
+    try {
+      const schema = await getFullSchema(db, targetDb);
+      return schema;
+    } catch (error) {
+      console.error("Failed to get full schema");
       throw error;
     }
   }

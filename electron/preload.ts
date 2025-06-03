@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld("db", {
     ipcRenderer.invoke("db:listSchemaTables", db, targetSchema, targetDb),
   query: (db: Database, sql: string, params: any[]) =>
     ipcRenderer.invoke("db:query", db, sql, params),
+  getFullSchema: (db: Database, targetDb?: string) =>
+    ipcRenderer.invoke("db:getFullSchema", db, targetDb),
 });
 
 contextBridge.exposeInMainWorld("settings", {

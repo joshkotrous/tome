@@ -23,7 +23,7 @@ export default function ChatInterface() {
 
   if (msgs.length > 0) {
     return (
-      <div className="flex flex-1 flex-col justify-center h-full px-8 pb-8 overflow-auto">
+      <div className="h-full px-8 pb-8 overflow-auto">
         <div className="w-full flex flex-col flex-1">
           {msgs.map((i) => (
             <div

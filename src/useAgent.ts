@@ -18,11 +18,7 @@ export function useAgent() {
   const [thinking, setThinking] = useState(false);
   const abortRef = useRef<AbortController>();
 
-  async function executeQuery(
-    connectionName: string,
-    connectionId: number,
-    query: string
-  ) {
+  async function getConnection(connectionName: string, connectionId: number) {
     let conn =
       connected.find(
         (i) => i.name === connectionName && i.id === connectionId
@@ -37,6 +33,21 @@ export function useAgent() {
     if (!conn) {
       throw new Error(`Could not connect to ${connectionId}:${connectionName}`);
     }
+    return conn;
+  }
+
+  async function getFullSchema(connectionName: string, connectionId: number) {
+    const conn = await getConnection(connectionName, connectionId);
+    const schema = await window.db.getFullSchema(conn);
+    return schema;
+  }
+
+  async function executeQuery(
+    connectionName: string,
+    connectionId: number,
+    query: string
+  ) {
+    const conn = await getConnection(connectionName, connectionId);
     const res = await runQuery({ id: nanoid(4), connection: conn, query });
     return res;
   }
@@ -53,6 +64,16 @@ export function useAgent() {
       }),
       execute: async ({ query, connectionId, connectionName }) =>
         JSON.stringify(await executeQuery(connectionName, connectionId, query)),
+    }),
+    getSchema: tool({
+      description:
+        "Gets the full schema for a given connection. Used to get more context about the db you're querying to know what tables/columns you have access to",
+      parameters: z.object({
+        connectionId: z.number(),
+        connectionName: z.string(),
+      }),
+      execute: async ({ connectionId, connectionName }) =>
+        JSON.stringify(await getFullSchema(connectionName, connectionId)),
     }),
   };
 
@@ -82,11 +103,11 @@ export function useAgent() {
       ${JSON.stringify(databases, null, 2)}
       </databases>
 
-      When using tools and a connectionName and connectionId are required, these should be retrieved from the <databases> list. When displaying query results, always default to a table format.`;
+      When using tools and a connectionName and connectionId are required, these should be retrieved from the <databases> list. When displaying query results, always default to a table format. When outputting results also include the query you used to show those`;
       // Use textStream and handle tools through the result
       const streamResult = streamResponse({
         tools,
-        messages: msgs,
+        messages: msgs.length === 0 ? [{ role: "user", content: text }] : msgs,
         system: systemPrompt,
         apiKey: settings.aiFeatures.apiKey,
         provider: settings.aiFeatures.provider,

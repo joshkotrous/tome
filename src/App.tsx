@@ -1,6 +1,6 @@
 import { AppDataProvider } from "./applicationDataProvider";
 import BottomBar from "./components/bottomBar";
-import SqlEditor from "./components/editor";
+import QueryInterface from "./components/editor";
 import Sidebar from "./components/sidebar";
 import Toolbar from "./components/toolbar";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -18,7 +18,7 @@ function App() {
               <div className="flex-1 flex min-h-0">
                 <Sidebar />
                 <div className="flex-1 flex flex-col min-w-0">
-                  <SqlEditor />
+                  <QueryInterface />
                   <BottomBar />
                 </div>
               </div>

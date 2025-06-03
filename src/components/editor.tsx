@@ -14,8 +14,36 @@ import AddDatabaseButton from "./addDatabaseButton";
 import { cn } from "@/lib/utils";
 import { DBInformation } from "./sidebar";
 import ChatInterface from "./chatInterface";
+import { Switch } from "./ui/switch";
 
-export default function SqlEditor() {
+export default function QueryInterface() {
+  const [agentModeEnabled, setAgentModeEnabled] = useState(true);
+
+  function displayMode() {
+    if (agentModeEnabled) {
+      return <ChatInterface />;
+    }
+
+    return <SqlEditor />;
+  }
+
+  return (
+    <div className=" flex-1 min-h-0 size-full bg-zinc-950 rounded-t-md flex flex-col">
+      <div className="border-b p-2 flex justify-end">
+        <div className="text-xs flex items-center gap-2">
+          <Switch
+            checked={agentModeEnabled}
+            onCheckedChange={setAgentModeEnabled}
+          />
+          Agent Mode
+        </div>
+      </div>
+      {displayMode()}
+    </div>
+  );
+}
+
+export function SqlEditor() {
   const { queries, currentQuery, runQuery, updateQuery } = useQueryData();
 
   const [query, setQuery] = useState<Query | null>(null);
@@ -100,9 +128,9 @@ export default function SqlEditor() {
     monaco.editor.setTheme("zinc-dark");
   };
 
-  if (true) {
-    return <ChatInterface />;
-  }
+  // if (true) {
+  //   return <ChatInterface />;
+  // }
 
   if (databases.length === 0) {
     return (
@@ -139,7 +167,7 @@ export default function SqlEditor() {
   }
 
   return (
-    <div className=" flex-1 min-h-0 size-full bg-zinc-950 rounded-t-md flex flex-col">
+    <>
       <QueryTabs />
       <div className="w-full border-b border-zinc-800 p-2 font-mono text-xs text-zinc-500 flex items-center gap-2">
         {query && <DBInformation db={query.connection} />}
@@ -202,7 +230,7 @@ export default function SqlEditor() {
         }}
         className="flex-1 bg-zinc-950"
       />
-    </div>
+    </>
   );
 }
 

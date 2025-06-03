@@ -1,4 +1,4 @@
-import { JsonQueryResult, TableDef } from "core/database";
+import { DatabaseSchema, JsonQueryResult, TableDef } from "core/database";
 import { Database, Settings } from "./types";
 
 export {};
@@ -26,6 +26,7 @@ interface DbAPI {
     sql: string,
     params?: any[]
   ) => Promise<JsonQueryResult>;
+  getFullSchema: (db: Database, targetDb?: string) => Promise<DatabaseSchema>;
 }
 
 interface SettingsAPI {
