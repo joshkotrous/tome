@@ -4,9 +4,9 @@ import { Textarea } from "./ui/textarea";
 import { SetStateAction, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAgent } from "@/useAgent";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import Spinner from "./ui/spinner";
+import MarkdownRenderer from "./markdownRederer";
+import { Message } from "ai";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -23,17 +23,15 @@ export default function ChatInterface() {
 
   if (msgs.length > 0) {
     return (
-      <div className="h-full px-8 pb-8 overflow-auto">
-        <div className="w-full flex flex-col flex-1">
+      <div className="flex  flex-col relative h-full  pb-4 overflow-auto mx-auto w-full max-w-5xl">
+        <div className=" flex flex-col flex-1 p-4">
           {msgs.map((i) => (
-            <div
-              className={cn("flex w-full", i.role === "user" && "justify-end")}
-            >
+            <div className={cn("flex", i.role === "user" && "justify-end")}>
               <ChatMessage message={i} />
             </div>
           ))}
         </div>
-        <div className="sticky bottom-0">
+        <div className="flex sticky justify-center w-full bottom-2 left-0 px-4">
           <ChatInput
             input={input}
             setInput={setInput}
@@ -45,7 +43,7 @@ export default function ChatInterface() {
   }
 
   return (
-    <div className="flex flex-1 justify-center items-center">
+    <div className="flex flex-1 justify-center  items-center">
       <div className="w-full max-w-2xl px-8">
         <h2 className="text-center font-bold text-2xl  select-none">
           What can I help you with today?
@@ -84,7 +82,7 @@ function ChatInput({
   onSubmit: () => void;
 }) {
   return (
-    <div className="bg-zinc-900 rounded-md border p-2 flex items-end gap-2">
+    <div className="bg-zinc-900 rounded-md border p-2 flex items-end gap-2 w-full max-w-2xl">
       <Textarea
         placeholder="Enter a message..."
         value={input}
@@ -102,32 +100,32 @@ function ChatInput({
   );
 }
 
-function ChatMessage({
-  message,
-}: {
-  message: { role: "user" | "assistant"; content: string };
-}) {
+function ChatMessage({ message }: { message: Omit<Message, "id"> }) {
   const { thinking } = useAgent();
   const fromUser = message.role === "user";
 
   return (
     <div
       className={cn(
-        "flex flex-col gap-1 py-2 w-full overflow-auto",
+        "overflow-auto max-w-xl",
         fromUser ? "items-end" : "items-start"
       )}
     >
-      <span className="text-xs text-zinc-400 capitalize">{message.role}</span>
-
+      <span
+        className={cn(
+          "py-2 w-full flex text-xs text-zinc-400 capitalize",
+          fromUser && "justify-end "
+        )}
+      >
+        {message.role}
+      </span>
       <div
         className={cn(
           "rounded-lg px-4 py-3 whitespace-pre-wrap break-words",
           fromUser ? "bg-zinc-600 text-white" : "bg-zinc-800 text-zinc-100"
         )}
       >
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {message.content}
-        </ReactMarkdown>
+        <MarkdownRenderer content={message.content} />
         {thinking && (
           <div>
             <Spinner /> Thinking...

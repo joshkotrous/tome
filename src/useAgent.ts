@@ -52,7 +52,6 @@ export function useAgent() {
     return res;
   }
 
-  // --- build tools every render (cheap) -------------------------------
   const tools: ToolMap = {
     runQuery: tool({
       description:
@@ -77,7 +76,6 @@ export function useAgent() {
     }),
   };
 
-  // --- send a new user message & stream assistant reply ---------------
   const send = useCallback(
     async (text: string) => {
       if (!settings) {
@@ -93,7 +91,12 @@ export function useAgent() {
         return;
       }
 
-      setMsgs((m) => [...m, { role: "user", content: text }]);
+      const updatedMessages = [
+        ...msgs,
+        { role: "user" as "user" | "assistant", content: text },
+      ];
+
+      setMsgs(updatedMessages);
       setThinking(true);
       const ctrl = new AbortController();
       abortRef.current = ctrl;
@@ -103,11 +106,11 @@ export function useAgent() {
       ${JSON.stringify(databases, null, 2)}
       </databases>
 
-      When using tools and a connectionName and connectionId are required, these should be retrieved from the <databases> list. When displaying query results, always default to a table format. When outputting results also include the query you used to show those`;
+      When using tools and a connectionName and connectionId are required, these should be retrieved from the <databases> list. When displaying query results, always default to a table format. When outputting results also include the query you used to show those. If there are multiple databases, you should ask the user which one to use if they dont already specify. Dont output the fully query output in your response, only a summary of a few records. When a user asks you to write a query, default to executing it unless it is mutable or destructive.`;
       // Use textStream and handle tools through the result
       const streamResult = streamResponse({
         tools,
-        messages: msgs.length === 0 ? [{ role: "user", content: text }] : msgs,
+        messages: updatedMessages,
         system: systemPrompt,
         apiKey: settings.aiFeatures.apiKey,
         provider: settings.aiFeatures.provider,
@@ -165,7 +168,7 @@ export function useAgent() {
       }
       setThinking(false);
     },
-    [tools]
+    [msgs, settings, databases]
   );
 
   const stop = () => abortRef.current?.abort();
