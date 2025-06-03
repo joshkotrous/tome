@@ -1,7 +1,7 @@
 import { ArrowUp } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { SetStateAction, useState } from "react";
+import { SetStateAction, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAgent } from "@/useAgent";
 import Spinner from "./ui/spinner";
@@ -15,7 +15,7 @@ type ChatMessage = {
 
 export default function ChatInterface() {
   const [input, setInput] = useState("");
-  const { msgs, send } = useAgent();
+  const { msgs, send, thinking } = useAgent();
   function sendMessage(msg: ChatMessage) {
     send(msg.content);
     setInput("");
@@ -27,7 +27,7 @@ export default function ChatInterface() {
         <div className=" flex flex-col flex-1 p-4">
           {msgs.map((i) => (
             <div className={cn("flex", i.role === "user" && "justify-end")}>
-              <ChatMessage message={i} />
+              <ChatMessage sendMessage={sendMessage} message={i} />
             </div>
           ))}
         </div>
@@ -62,6 +62,11 @@ export default function ChatInterface() {
             Ask a question
           </div>
         </div>
+        {thinking && (
+          <div className="flex gap-1.5 items-center">
+            <Spinner /> Thinking...
+          </div>
+        )}
         <ChatInput
           input={input}
           setInput={setInput}
@@ -100,9 +105,55 @@ function ChatInput({
   );
 }
 
-function ChatMessage({ message }: { message: Omit<Message, "id"> }) {
+function parseUIAction(response: string) {
+  // Check if response is valid
+  if (!response || typeof response !== "string") {
+    return { message: "", action: null };
+  }
+
+  // Look for the last occurrence of <ui_action> tag
+  const actionMatch = response.match(/<ui_action>(.*?)<\/ui_action>\s*$/);
+
+  if (actionMatch) {
+    // Extract the action content
+    const action = actionMatch[1].trim();
+
+    // Remove the ui_action tag from the message
+    const message = response
+      .replace(/<ui_action>.*?<\/ui_action>\s*$/, "")
+      .trim();
+
+    return {
+      message: message
+        .trim()
+        .replace("<ui_action>", "")
+        .replace("</ui_action>", ""),
+      action: action,
+    };
+  }
+
+  return {
+    message: response
+      .trim()
+      .replace("<ui_action>", "")
+      .replace("</ui_action>", ""),
+    action: null,
+  };
+}
+
+function ChatMessage({
+  message,
+  sendMessage,
+}: {
+  message: Omit<Message, "id">;
+  sendMessage: (v: ChatMessage) => void;
+}) {
   const { thinking } = useAgent();
   const fromUser = message.role === "user";
+
+  const { message: cleanedMessage, action } = useMemo(() => {
+    return parseUIAction(message.content);
+  }, [message.content]);
 
   return (
     <div
@@ -125,13 +176,38 @@ function ChatMessage({ message }: { message: Omit<Message, "id"> }) {
           fromUser ? "bg-zinc-600 text-white" : "bg-zinc-800 text-zinc-100"
         )}
       >
-        <MarkdownRenderer content={message.content} />
+        <MarkdownRenderer content={cleanedMessage} />
         {thinking && (
-          <div>
+          <div className="flex gap-1.5 items-center">
             <Spinner /> Thinking...
           </div>
         )}
+        <UIAction sendMessage={sendMessage} action={action} />
       </div>
     </div>
   );
+}
+
+function UIAction({
+  action,
+  sendMessage,
+}: {
+  action: string | null;
+  sendMessage: (v: ChatMessage) => void;
+}) {
+  if (action === "approve-query") {
+    return (
+      <div className="py-2 w-full flex justify-end">
+        <Button
+          onClick={() =>
+            sendMessage({ role: "user", content: "Run the query" })
+          }
+        >
+          Run Query
+        </Button>
+      </div>
+    );
+  }
+
+  return null;
 }

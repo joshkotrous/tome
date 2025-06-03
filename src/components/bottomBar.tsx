@@ -26,6 +26,10 @@ export default function BottomBar() {
     return () => document.removeEventListener("keydown", down);
   }, []);
 
+  useEffect(() => {
+    setOpen(true);
+  }, [queryResult]);
+
   return (
     <ResizableContainer
       direction="vertical"

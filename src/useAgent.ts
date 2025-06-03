@@ -106,7 +106,11 @@ export function useAgent() {
       ${JSON.stringify(databases, null, 2)}
       </databases>
 
-      When using tools and a connectionName and connectionId are required, these should be retrieved from the <databases> list. When displaying query results, always default to a table format. When outputting results also include the query you used to show those. If there are multiple databases, you should ask the user which one to use if they dont already specify. Dont output the fully query output in your response, only a summary of a few records. When a user asks you to write a query, default to executing it unless it is mutable or destructive.`;
+      When using tools and a connectionName and connectionId are required, these should be retrieved from the <databases> list. When displaying query results, always default to a table format. When outputting results also include the query you used to show those. If there are multiple databases, you should ask the user which one to use if they dont already specify. Dont output the fully query output in your response, only a summary of a few records. When a user asks you to write a query, default to executing it unless it is mutable or destructive. Always output any queries you ran. End every response with <ui_action>.
+      
+      UI Action instructions:
+      If you need permission to run a query, output 'approve-query' within <ui_action>. Do not include quotes.
+      `;
       // Use textStream and handle tools through the result
       const streamResult = streamResponse({
         tools,

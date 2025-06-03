@@ -28,11 +28,12 @@ export default function MarkdownRenderer({ content }: { content: string }) {
       />
     ),
     ul: (props: ComponentProps<"ul">) => (
-      <ul className="list-disc pl-5" {...props} />
+      <ul className="list-disc pl-5 text-sm flex flex-col gap-1" {...props} />
     ),
     ol: (props: ComponentProps<"ol">) => (
-      <ol className="list-decimal pl-5" {...props} />
+      <ol className="list-decimal pl-5 text-sm flex flex-col" {...props} />
     ),
+    li: (props: ComponentProps<"li">) => <li className="text-sm" {...props} />,
     blockquote: (props: ComponentProps<"blockquote">) => (
       <blockquote
         className="border-l-4 border-gray-400 italic text-zinc-600"
@@ -42,11 +43,9 @@ export default function MarkdownRenderer({ content }: { content: string }) {
     code: ({ inline, className, children, ...props }: any) => {
       // Manual detection of inline code if the inline prop isn't reliable
       const content = String(children).replace(/\n$/, "");
-
       // If there's no className and the content doesn't contain line breaks,
       // or if inline is explicitly true, treat it as inline code
       const isInline = inline || (!className && !content.includes("\n"));
-
       if (isInline) {
         return (
           <code
@@ -57,10 +56,8 @@ export default function MarkdownRenderer({ content }: { content: string }) {
           </code>
         );
       }
-
       const match = /language-(\w+)/.exec(className || "");
       const language = match ? match[1] : "";
-
       return (
         <div className="rounded-md overflow-hidden">
           <div className="bg-zinc-900 text-zinc-400 text-xs px-4 py-1.5 flex justify-between items-center">
