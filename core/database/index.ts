@@ -178,11 +178,24 @@ function toJsonResult(
   }
 }
 
+// --- vvvv Patch: restrict query() to SELECT only vvvv ---
+function isSelectQuery(sql: string): boolean {
+  // Remove leading whitespace and SQL comments, then check command
+  let cleaned = sql.trim();
+  // Remove possible SQL comments (/* ... */ and -- ...)
+  cleaned = cleaned.replace(/^((\/\*([\s\S]*?)\*\/)|(--.*\n?))*\s*/g, "");
+  return /^select\b/i.test(cleaned);
+}
 export async function query(
   db: Database,
   sql: string,
   params: any[] = []
 ): Promise<JsonQueryResult> {
+  if (!isSelectQuery(sql)) {
+    throw new Error(
+      "Only SELECT queries are allowed."
+    );
+  }
   const entry = connections.get(db.id) ?? (await connect(db));
   const { driver } = entry;
 
@@ -217,6 +230,7 @@ export async function query(
       throw new Error(`Unsupported engine ${db.engine as string}`);
   }
 }
+// --- ^^^^ Patch: restrict query() to SELECT only ^^^^ ---
 
 export async function listRemoteDatabases(db: Database): Promise<string[]> {
   const { driver } = await connect(db);
