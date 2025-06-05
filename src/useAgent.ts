@@ -8,6 +8,45 @@ import { useAppData } from "./applicationDataProvider";
 import { useQueryData } from "./queryDataProvider";
 import { nanoid } from "nanoid";
 
+function isQueryAllowed(sql: string): boolean {
+  /**
+   * Only allow read-only/stateless queries, e.g. SELECT (and optionally EXPLAIN, WITH).
+   * Block any mutative/destructive SQL statements.
+   *
+   * Covers attempts with leading whitespace and SQL comments.
+   */
+  // Remove leading whitespace and SQL comments (single/multiline)
+  let stripped = sql.trim();
+
+  // Remove leading /* ... */ block comments
+  while (stripped.startsWith("/*")) {
+    const endIdx = stripped.indexOf("*/");
+    if (endIdx === -1) break;
+    stripped = stripped.slice(endIdx + 2).trim();
+  }
+  // Remove leading -- ... comments
+  while (stripped.startsWith("--")) {
+    const endIdx = stripped.indexOf("\n");
+    if (endIdx === -1) return false; // Only comment, no real statement
+    stripped = stripped.slice(endIdx + 1).trim();
+  }
+
+  // Extract first word/keyword (case-insensitive)
+  // Also allow "WITH", "EXPLAIN", "SELECT"
+  const firstTokenMatch = stripped.match(/^(\w+)/i);
+  if (!firstTokenMatch) {
+    return false;
+  }
+  const firstToken = firstTokenMatch[1].toUpperCase();
+
+  // Allow only certain safe SQL commands at the top level:
+  // SELECT, WITH, EXPLAIN (for read queries)
+  // You can expand this list as necessary.
+  const ALLOWED_SQL_COMMANDS = ["SELECT", "WITH", "EXPLAIN"];
+
+  return ALLOWED_SQL_COMMANDS.includes(firstToken);
+}
+
 export function useAgent() {
   const { connect, connected } = useDB();
   const { runQuery } = useQueryData();
@@ -47,6 +86,11 @@ export function useAgent() {
     connectionId: number,
     query: string
   ) {
+    if (!isQueryAllowed(query)) {
+      throw new Error(
+        "Query type not permitted. Only safe, read-only SQL statements (SELECT, WITH, EXPLAIN) are allowed."
+      );
+    }
     const conn = await getConnection(connectionName, connectionId);
     const res = await runQuery({ id: nanoid(4), connection: conn, query });
     return res;
