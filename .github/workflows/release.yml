@@ -57,8 +57,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - run: npm ci
-      - run: npm install appdmg
+      - run: |
+          PYTHON=$(which python3) \
+          npm install --no-save appdmg
       - run: npm run prebuild
       - run: npm run build:mac:arm64
       - run: npm run build:mac:x64
