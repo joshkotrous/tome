@@ -20,11 +20,11 @@
   "build:mac": "npm-run-all package:mac dmg:mac",
 
   "package:mac:arm64": "electron-packager . Tome --platform=darwin --arch=arm64 --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite",
-  "dmg:mac:arm64":     "electron-installer-dmg out/Tome-darwin-arm64/Tome.app Tome-mac-arm64 --out=out --overwrite --config=build/dmg.json",
+  "dmg:mac:arm64":     "electron-installer-dmg out/Tome-darwin-arm64/Tome.app Tome-mac-arm64 --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite ",
   "build:mac:arm64":   "npm-run-all package:mac:arm64 dmg:mac:arm64",
 
   "package:mac:x64": "electron-packager . Tome --platform=darwin --arch=x64 --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite",
-  "dmg:mac:x64":     "electron-installer-dmg out/Tome-darwin-x64/Tome.app Tome-mac-intel --out=out --overwrite --config=build/dmg.json",
+  "dmg:mac:x64":     "electron-installer-dmg out/Tome-darwin-x64/Tome.app Tome-mac-intel --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite",
   "build:mac:x64":   "npm-run-all package:mac:x64 dmg:mac:x64",
 
   "package:win": "electron-packager . Tome --platform=win32 --arch=x64 --out=out --icon=public/tome.ico --overwrite",
