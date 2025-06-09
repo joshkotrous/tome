@@ -28,7 +28,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
       - run: npm ci --omit=optional
 
       - id: bump
@@ -59,6 +58,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - run: npm ci
+      - run: npm run prebuild
       - run: npm run build:mac:arm64
       - run: npm run build:mac:x64
 
@@ -80,6 +80,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - run: npm ci --omit=optional
+      - run: npm run prebuild
       - run: npm run build:win
 
       - name: Upload EXE
@@ -101,6 +102,7 @@ jobs:
 
       - run: sudo apt-get update && sudo apt-get install -y squashfs-tools xorriso
       - run: npm ci --omit=optional
+      - run: npm run prebuild
       - run: npm run build:linux
 
       - name: Upload AppImage
