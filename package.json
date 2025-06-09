@@ -75,6 +75,7 @@
     "zod": "^3.25.47"
   },
   "devDependencies": {
+    "appdmg": "^0.6.6",
     "@electron/packager": "^18.3.6",
     "@tailwindcss/postcss": "^4.1.8",
     "@types/better-sqlite3": "^7.6.13",
@@ -114,8 +115,6 @@
     "vite-plugin-electron": "^0.28.6",
     "vite-plugin-electron-renderer": "^0.14.5"
   },
-  "optionalDependencies": {
-  "appdmg": "^0.6.6"
-},
+
   "main": "dist-electron/main.js"
 }

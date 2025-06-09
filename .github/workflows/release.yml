@@ -58,7 +58,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - run: npm ci
-      - run: npm i appdmg
       - run: npm run prebuild
       - run: npm run build:mac:arm64
       - run: npm run build:mac:x64
