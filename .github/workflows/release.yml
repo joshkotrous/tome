@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - run: npm ci --omit=optional
+      - run: npm ci --omit=dev
 
       - id: bump
         name: Bump version, commit, push tag
