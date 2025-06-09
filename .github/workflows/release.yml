@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - run: npm ci
+      - run: npm ci --omit=optional
 
       - id: bump
         name: Bump version, commit, push tag
@@ -79,7 +79,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - run: npm ci
+      - run: npm ci --omit=optional
       - run: npm run build:win
 
       - name: Upload EXE
@@ -100,7 +100,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - run: sudo apt-get update && sudo apt-get install -y squashfs-tools xorriso
-      - run: npm ci
+      - run: npm ci --omit=optional
       - run: npm run build:linux
 
       - name: Upload AppImage
