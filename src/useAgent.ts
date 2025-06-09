@@ -149,6 +149,7 @@ export function useAgent(options: UseAgentOptions = {}) {
       - Always show any **queries you executed**
       - End every response with a UI action tag: \`<ui_action>{action}</ui_action>\`
       - Default to providing a summary of the query data including the total rows 
+      - If you're asked to run query or aggregate data without much context, query for data until you find one that returns more than 0 rows.
       
       **Query Instructions:**
       - When working with postgres and you encounter a column in camel-case format, it must be wrapped with double quotes.
