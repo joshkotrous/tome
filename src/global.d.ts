@@ -1,5 +1,5 @@
 import { DatabaseSchema, JsonQueryResult, TableDef } from "core/database";
-import { Database, Settings } from "./types";
+import { Conversation, ConversationMessage, Database, Settings } from "./types";
 
 export {};
 
@@ -34,9 +34,24 @@ interface SettingsAPI {
   updateSettings: (settings: Settings) => Promise<Settings>;
 }
 
+interface MessagesAPI {
+  createMessage: (
+    values: Omit<ConversationMessage, "id" | "createdAt">
+  ) => Promise<ConversationMessage>;
+  listMessages: (conversation: number) => Promise<ConversationMessage[]>;
+}
+
+interface ConversationsAPI {
+  createConversation: (initialMessage: string) => Promise<Conversation>;
+  listConversations: () => Promise<Conversation[]>;
+  deleteConversation: (conversation: number) => Promise<void>;
+}
+
 declare global {
   interface Window {
     db: DbAPI;
     settings: SettingsAPI;
+    messages: MessagesAPI;
+    conversations: ConversationsAPI;
   }
 }

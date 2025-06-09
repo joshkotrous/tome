@@ -1,5 +1,5 @@
 {
-  "name": "wayfarer",
+  "name": "tome",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,7 +8,10 @@
     "build": "tsc && vite build && electron-builder",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "rebuild": "electron-rebuild -f -w better-sqlite3"
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "build:arm": "vite build && npx electron-packager . tome --platform=darwin --arch=arm64 --icon=public/tome.icns --overwrite",
+    "build:win": "vite build && npx electron-packager . tome --platform=win32 --arch=x64 --icon=public/tome.icns --overwrite",
+    "build:linux": "vite build && npx electron-packager . tome --platform=linux --arch=x64 --icon=public/tome.icns --overwrite"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",
@@ -41,11 +44,13 @@
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^15.6.1",
+    "react-window": "^1.8.11",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.3.0",
     "zod": "^3.25.47"
   },
   "devDependencies": {
+    "@electron/packager": "^18.3.6",
     "@tailwindcss/postcss": "^4.1.8",
     "@types/better-sqlite3": "^7.6.13",
     "@types/mysql": "^2.15.27",
@@ -54,6 +59,8 @@
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/react-virtualized-auto-sizer": "^1.0.4",
+    "@types/react-window": "^1.8.8",
     "@typescript-eslint/eslint-plugin": "^7.1.1",
     "@typescript-eslint/parser": "^7.1.1",
     "@vitejs/plugin-react": "^4.2.1",

@@ -41,11 +41,14 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
   const runQuery = useCallback(async (query: Query) => {
     setCurrrentQuery(query.id);
     setLoadingQuery(true);
-    setQueryResult(null);
+    // setQueryResult(null);
     setError(null);
     try {
       const result = await window.db.query(query.connection, query.query);
-      setQueryResult(result);
+      console.log("QUERY RESULT", JSON.stringify(result));
+      const clonedResult = JSON.parse(JSON.stringify(result));
+
+      setQueryResult(clonedResult);
       return result;
     } catch (error: any) {
       console.error("Failed to run query", error);

@@ -1,4 +1,10 @@
-import { Message, StreamTextResult, Tool } from "ai";
+import {
+  generateText,
+  Message,
+  StreamTextResult,
+  Tool,
+  GenerateTextResult,
+} from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { streamText } from "ai";
@@ -15,7 +21,6 @@ export function streamResponse(opts: {
   messages?: Omit<Message, "id">[];
 }): StreamTextResult<ToolMap, never> {
   const { prompt, tools = {} } = opts;
-
   switch (opts.provider) {
     case "Open AI":
       return streamOpenAI(
@@ -46,7 +51,6 @@ function streamOpenAI(
   prompt?: string
 ): StreamTextResult<ToolMap, never> {
   const openai = createOpenAI({ apiKey });
-
   return streamText({
     model: openai("gpt-4o"),
     prompt,
@@ -65,8 +69,74 @@ function streamAnthropic(
   prompt?: string
 ): StreamTextResult<ToolMap, never> {
   const anthropic = createAnthropic({ apiKey });
-
   return streamText({
+    model: anthropic("claude-3-sonnet-20240229"),
+    prompt,
+    system,
+    tools,
+    messages,
+    maxSteps: 5,
+  });
+}
+
+export async function getResponse(opts: {
+  prompt?: string;
+  system?: string;
+  tools?: ToolMap;
+  apiKey: string;
+  provider: AIProvider;
+  messages?: Omit<Message, "id">[];
+}): Promise<GenerateTextResult<ToolMap, never>> {
+  const { prompt, tools = {} } = opts;
+  switch (opts.provider) {
+    case "Open AI":
+      return await generateOpenAI(
+        opts.apiKey,
+        tools,
+        opts.system,
+        opts.messages,
+        prompt
+      );
+    case "Anthropic":
+      return await generateAnthropic(
+        opts.apiKey,
+        tools,
+        opts.system,
+        opts.messages,
+        prompt
+      );
+    default:
+      throw new Error(`Unsupported provider: ${opts.provider}`);
+  }
+}
+
+async function generateOpenAI(
+  apiKey: string,
+  tools: ToolMap,
+  system?: string,
+  messages?: Omit<Message, "id">[],
+  prompt?: string
+): Promise<GenerateTextResult<ToolMap, never>> {
+  const openai = createOpenAI({ apiKey });
+  return await generateText({
+    model: openai("gpt-4o-mini"),
+    prompt,
+    system,
+    tools,
+    messages,
+    maxSteps: 5,
+  });
+}
+
+async function generateAnthropic(
+  apiKey: string,
+  tools: ToolMap,
+  system?: string,
+  messages?: Omit<Message, "id">[],
+  prompt?: string
+): Promise<GenerateTextResult<ToolMap, never>> {
+  const anthropic = createAnthropic({ apiKey });
+  return await generateText({
     model: anthropic("claude-3-sonnet-20240229"),
     prompt,
     system,

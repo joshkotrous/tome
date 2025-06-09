@@ -1,12 +1,31 @@
-import { ArrowUp } from "lucide-react";
+import {
+  ArrowUp,
+  MessageCircle,
+  MessageCirclePlus,
+  SidebarClose,
+  Trash,
+} from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { SetStateAction, useMemo, useState } from "react";
+import { SetStateAction, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAgent } from "@/useAgent";
 import Spinner from "./ui/spinner";
 import MarkdownRenderer from "./markdownRederer";
 import { Message } from "ai";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import ResizableContainer from "./ui/resizableContainer";
+import { Conversation, ConversationMessage } from "@/types";
+import { Input } from "./ui/input";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
+import AnimatedEllipsis from "./animatedEllipsis";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -14,66 +33,246 @@ type ChatMessage = {
 };
 
 export default function ChatInterface() {
+  const [selectedConversation, setSelectedConversation] = useState<
+    number | null
+  >(null);
   const [input, setInput] = useState("");
-  const { msgs, send, thinking } = useAgent();
-  function sendMessage(msg: ChatMessage) {
-    send(msg.content);
+
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+
+  const { msgs, send, thinking } = useAgent({
+    messages,
+    setMessages,
+  });
+  async function sendMessage(msg: ChatMessage) {
+    let convo: number | null = selectedConversation;
+    if (!selectedConversation) {
+      const newConversation = await window.conversations.createConversation(
+        msg.content
+      );
+      convo = newConversation.id;
+      setSelectedConversation(newConversation.id);
+    }
+    send(msg.content, convo ?? undefined);
     setInput("");
   }
 
-  if (msgs.length > 0) {
-    return (
-      <div className="flex  flex-col relative h-full  pb-4 overflow-auto mx-auto w-full max-w-5xl">
-        <div className=" flex flex-col flex-1 p-4">
-          {msgs.map((i) => (
-            <div className={cn("flex", i.role === "user" && "justify-end")}>
-              <ChatMessage sendMessage={sendMessage} message={i} />
+  const suggestions = [
+    {
+      name: "Run query",
+      message: "Run a query of your choice against any table or database",
+    },
+    {
+      name: "Visualize Data",
+      message: "Run a query of your choice against any table or database",
+    },
+    {
+      name: "Analyze Data",
+      message: "Run a query of your choice against any table or database",
+    },
+    {
+      name: "Ask a question",
+      message:
+        "Come up with a question I could ask you about my data and follow with an answer",
+    },
+  ];
+
+  useEffect(() => {
+    async function getData() {
+      if (selectedConversation) {
+        const convo = await window.messages.listMessages(selectedConversation);
+        setMessages(convo);
+      } else {
+        setMessages([]);
+      }
+    }
+    getData();
+  }, [selectedConversation]);
+
+  return (
+    <div className="flex flex-1 h-full min-h-0">
+      <ConversationsList
+        selectedConversation={selectedConversation}
+        setSelectedConversation={setSelectedConversation}
+      />
+      {selectedConversation && messages.length > 0 && (
+        <div className="flex space-y-4  flex-col flex-1 h-full  pb-4 overflow-auto mx-auto w-full max-w-5xl">
+          <div className=" flex flex-col flex-1 p-4">
+            {msgs.map((i) => (
+              <div className={cn("flex", i.role === "user" && "justify-end")}>
+                <ChatMessage sendMessage={sendMessage} message={i} />
+              </div>
+            ))}
+            {thinking && <AnimatedEllipsis size="lg" />}
+          </div>
+          <div className="flex flex-col gap-2 sticky justify-center items-center w-full bottom-2 left-0 px-4">
+            <div className="max-w-2xl w-full space-y-2">
+              <div className="w-full">
+                {thinking && (
+                  <div className="flex gap-1.5 items-center text-sm">
+                    <Spinner /> Thinking...
+                  </div>
+                )}
+              </div>
+
+              <ChatInput
+                input={input}
+                setInput={setInput}
+                onSubmit={() => sendMessage({ role: "user", content: input })}
+              />
             </div>
-          ))}
+          </div>
         </div>
-        <div className="flex sticky justify-center w-full bottom-2 left-0 px-4">
+      )}
+      {!selectedConversation && (
+        <div className="flex  flex-col flex-1 w-full  px-8 items-center justify-center">
+          <h2 className="text-center font-bold text-2xl  select-none">
+            What can I help you with today?
+          </h2>
+          <div className="flex justify-center flex-wrap py-2 gap-1.5 ">
+            {suggestions.map((i) => (
+              <div
+                onClick={() =>
+                  sendMessage({ role: "user", content: i.message })
+                }
+                className="text-xs px-2 p-1 border rounded-full bg-zinc-900 hover:bg-zinc-800 select-none transition-all"
+              >
+                {i.name}
+              </div>
+            ))}
+          </div>
+          {thinking && (
+            <div className="flex gap-1.5 items-center">
+              <Spinner /> Thinking...
+            </div>
+          )}
           <ChatInput
             input={input}
             setInput={setInput}
             onSubmit={() => sendMessage({ role: "user", content: input })}
           />
         </div>
-      </div>
-    );
+      )}
+    </div>
+  );
+}
+
+function ConversationsList({
+  selectedConversation,
+  setSelectedConversation,
+}: {
+  selectedConversation: number | null;
+  setSelectedConversation: React.Dispatch<SetStateAction<number | null>>;
+}) {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+
+  const [open, setOpen] = useState(true);
+  function handleOpen() {
+    setOpen((open) => !open);
   }
 
+  useEffect(() => {
+    async function getData() {
+      const convos = await window.conversations.listConversations();
+      setConversations(convos);
+    }
+    getData();
+  }, []);
+
   return (
-    <div className="flex flex-1 justify-center  items-center">
-      <div className="w-full max-w-2xl px-8">
-        <h2 className="text-center font-bold text-2xl  select-none">
-          What can I help you with today?
-        </h2>
-        <div className="flex justify-center flex-wrap py-2 gap-1.5 ">
-          <div className="text-xs px-2 p-1 border rounded-full bg-zinc-900 hover:bg-zinc-800 select-none transition-all">
-            Run query
-          </div>
-          <div className="text-xs px-2 p-1 border rounded-full bg-zinc-900 hover:bg-zinc-800 select-none transition-all">
-            Visualize Data
-          </div>
-          <div className="text-xs px-2 p-1 border rounded-full bg-zinc-900 hover:bg-zinc-800 select-none transition-all">
-            Analyze Data
-          </div>
-          <div className="text-xs px-2 p-1 border rounded-full bg-zinc-900 hover:bg-zinc-800 select-none transition-all">
-            Ask a question
-          </div>
-        </div>
-        {thinking && (
-          <div className="flex gap-1.5 items-center">
-            <Spinner /> Thinking...
+    <ResizableContainer
+      direction="horizontal"
+      defaultSize={250}
+      minSize={60}
+      maxSize={500}
+      snapThreshold={60}
+      isCollapsed={!open}
+      onCollapsedChange={(collapsed) => setOpen(!collapsed)}
+      className="bg-zinc-900/50 border border-zinc-800 h-full rounded-r-md"
+      collapsedSize={40}
+    >
+      <div className="flex gap-1.5 items-center p-1.5 border-b text-sm h-8">
+        {open && (
+          <>
+            <MessageCircle className="size-5 text-zinc-400 fill-zinc-400" />{" "}
+            Conversations
+          </>
+        )}
+      </div>
+
+      <div className="absolute top-0.5 right-1">
+        <Button
+          onClick={handleOpen}
+          size="xs"
+          variant="ghost"
+          className="w-fit has-[>svg]:px-1"
+        >
+          <SidebarClose className="text-zinc-500 size-5" />
+        </Button>
+      </div>
+
+      <div className="p-2 space-y-2">
+        <Button
+          onClick={() => setSelectedConversation(null)}
+          className="w-full overflow-hidden"
+        >
+          <MessageCirclePlus /> {open && "New Chat"}
+        </Button>
+        {open && <Input placeholder="Search..." />}
+      </div>
+
+      <div className="h-full overflow-auto flex flex-col gap-1.5 p-2 ">
+        {!selectedConversation && (
+          <div
+            className={cn(
+              "rounded-sm p-1 gap-4 px-4 pr-1 items-center text-sm text-nowrap whitespace-nowrap overflow-hidden hover:bg-zinc-800 select-none transition-all flex bg-zinc-800 text-white"
+            )}
+          >
+            New conversation
           </div>
         )}
-        <ChatInput
-          input={input}
-          setInput={setInput}
-          onSubmit={() => sendMessage({ role: "user", content: input })}
-        />
+        {open &&
+          conversations.map((i) => (
+            <div
+              onClick={() => setSelectedConversation(i.id)}
+              className={cn(
+                "rounded-sm text-zinc-400 p-1 gap-4 px-4 pr-1 items-center text-sm text-nowrap whitespace-nowrap overflow-hidden hover:bg-zinc-800 select-none transition-all flex",
+                selectedConversation === i.id && "bg-zinc-800 text-white"
+              )}
+            >
+              <span className="w-full overflow-hidden"> {i.name}</span>
+              <span> {i.createdAt.toLocaleString()}</span>
+              <Dialog>
+                <DialogTrigger>
+                  <Trash className="size-3.5 hover:text-red-500 transition-all" />
+                </DialogTrigger>
+                <DialogContent className="dark">
+                  <DialogTitle>Delete conversation?</DialogTitle>
+                  <DialogDescription>
+                    This conversation and all its associated data will be
+                    removed
+                  </DialogDescription>
+                  <div className="w-full flex justify-end gap-2">
+                    <DialogClose>
+                      <Button>Cancel</Button>
+                    </DialogClose>
+                    <DialogClose>
+                      <Button
+                        onClick={async () => {
+                          await window.conversations.deleteConversation(i.id);
+                        }}
+                        variant="destructive"
+                      >
+                        Delete
+                      </Button>
+                    </DialogClose>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          ))}
       </div>
-    </div>
+    </ResizableContainer>
   );
 }
 
@@ -86,6 +285,13 @@ function ChatInput({
   setInput: React.Dispatch<SetStateAction<string>>;
   onSubmit: () => void;
 }) {
+  const handleSubmit = () => {
+    if (input.trim()) {
+      // Only submit if there's actual content
+      onSubmit();
+    }
+  };
+
   return (
     <div className="bg-zinc-900 rounded-md border p-2 flex items-end gap-2 w-full max-w-2xl">
       <Textarea
@@ -93,14 +299,26 @@ function ChatInput({
         value={input}
         onChange={(e) => setInput(e.target.value)}
         className="font-medium border-none bg-zinc-900 dark:bg-input/0"
+        onKeyDown={(e) => {
+          // Handle Cmd+Enter only within the textarea
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
       />
-      <Button
-        onClick={onSubmit}
-        variant="secondary"
-        className="rounded-full has-[>svg]:p-2 h-fit"
-      >
-        <ArrowUp className="stroke-3" />
-      </Button>
+      <Tooltip delayDuration={1000}>
+        <TooltipTrigger>
+          <Button
+            onClick={handleSubmit}
+            variant="secondary"
+            className="rounded-full has-[>svg]:p-2 h-fit"
+          >
+            <ArrowUp className="stroke-3" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>⌘ ↵ </TooltipContent>
+      </Tooltip>
     </div>
   );
 }
@@ -124,19 +342,15 @@ function parseUIAction(response: string) {
       .trim();
 
     return {
-      message: message
-        .trim()
-        .replace("<ui_action>", "")
-        .replace("</ui_action>", ""),
+      message: message.trim(),
+
       action: action,
     };
   }
 
   return {
-    message: response
-      .trim()
-      .replace("<ui_action>", "")
-      .replace("</ui_action>", ""),
+    message: response.trim(),
+
     action: null,
   };
 }
@@ -199,6 +413,7 @@ function UIAction({
     return (
       <div className="py-2 w-full flex justify-end">
         <Button
+          className="bg-green-700/50 hover:bg-green-700/25 border border-green-500 text-green-400"
           onClick={() =>
             sendMessage({ role: "user", content: "Run the query" })
           }

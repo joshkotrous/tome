@@ -61,6 +61,7 @@ export function AddDatabaseDialog({
     description: "",
     engine: "Postgres",
     name: "",
+    createdAt: new Date(),
   });
 
   const [loading, setLoading] = useState(false);
@@ -127,6 +128,7 @@ export function AddDatabaseDialog({
         description: "",
         engine: "Postgres",
         name: "",
+        createdAt: new Date(),
       });
     }
   }, [open]);

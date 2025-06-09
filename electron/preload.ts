@@ -1,4 +1,4 @@
-import { Database, Settings } from "@/types";
+import { ConversationMessage, Database, Settings } from "@/types";
 import { ipcRenderer, contextBridge } from "electron";
 
 // --------- Expose some API to the Renderer process ---------
@@ -56,4 +56,20 @@ contextBridge.exposeInMainWorld("settings", {
   getSettings: () => ipcRenderer.invoke("settings:getSettings"),
   updateSettings: (settings: Settings) =>
     ipcRenderer.invoke("settings:updateSettings", settings),
+});
+
+contextBridge.exposeInMainWorld("messages", {
+  createMessage: (values: Omit<ConversationMessage, "id" | "createdAt">) =>
+    ipcRenderer.invoke("messages:createMessage", values),
+  listMessages: (conversation: number) =>
+    ipcRenderer.invoke("messages:listMessages", conversation),
+});
+
+contextBridge.exposeInMainWorld("conversations", {
+  createConversation: (initialMessage: string) =>
+    ipcRenderer.invoke("conversations:createConversation", initialMessage),
+  listConversations: () =>
+    ipcRenderer.invoke("conversations:listConversations"),
+  deleteConversation: (conversation: number) =>
+    ipcRenderer.invoke("conversations:deleteConversation", conversation),
 });

@@ -27,7 +27,17 @@ import {
   // testConnection,
   updateDatabase,
 } from "../core/database";
-import { Database as DatabaseType, Settings } from "@/types";
+import {
+  createConversation,
+  deleteConversation,
+  listConversations,
+} from "../core/conversations";
+import { createMessage, listMessages } from "../core/messages";
+import {
+  ConversationMessage,
+  Database as DatabaseType,
+  Settings,
+} from "@/types";
 import log from "electron-log/main";
 console.log = (...args) => log.info(...args);
 console.error = (...args) => log.error(...args);
@@ -36,7 +46,7 @@ const Database = require("better-sqlite3");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const dbPath = path.join(app.getPath("userData"), "myapp.sqlite");
+export const dbPath = path.join(app.getPath("userData"), "tome.sqlite");
 
 console.log("DB AT ", dbPath);
 
@@ -44,30 +54,37 @@ function initDb() {
   console.log("Initializing database...");
   const raw = new Database(dbPath);
   const db = drizzle(raw, { schema });
+  const migrationsPath = app.isPackaged
+    ? path.join(process.resourcesPath, "app", "db", "migrations")
+    : path.join(__dirname, "../db/migrations");
+
+  console.log("Running migrations from ", migrationsPath);
+
   migrate(db, {
-    migrationsFolder: "./db/migrations",
+    migrationsFolder: migrationsPath,
   });
   console.log("Database initialized successfully");
-  return db;
 }
-
-export const db = initDb();
-initializeSettings();
 
 process.env.APP_ROOT = path.join(__dirname, "..");
 
 // 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
 export const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 export const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
-
+export const RENDERER_DIST = app.isPackaged
+  ? path.join(process.resourcesPath, "app", "dist") // production path inside .app bundle
+  : path.join(process.env.APP_ROOT!, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, "public")
   : RENDERER_DIST;
 
+const indexPath = path.join(RENDERER_DIST, "index.html");
+
 let win: BrowserWindow | null;
 
 function createWindow() {
+  initDb();
+  initializeSettings();
   win = new BrowserWindow({
     // --- visuals ----------------------------------------------------------
     width: 1280,
@@ -79,13 +96,12 @@ function createWindow() {
     },
     backgroundColor: "#09090b", // fills the window before renderer loads
     // --- assets -----------------------------------------------------------
-    icon: path.join(process.env.VITE_PUBLIC!, "electron-vite.svg"),
+    icon: path.join(process.env.VITE_PUBLIC!, "tome.svg"),
 
     // --- security + preload ----------------------------------------------
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
-      nodeIntegration: true,
     },
   });
 
@@ -98,7 +114,7 @@ function createWindow() {
     win.loadURL(VITE_DEV_SERVER_URL);
   } else {
     // win.loadFile('dist/index.html')
-    win.loadFile(path.join(RENDERER_DIST, "index.html"));
+    win.loadFile(indexPath);
   }
 }
 
@@ -293,6 +309,78 @@ ipcMain.handle(
       return schema;
     } catch (error) {
       console.error("Failed to get full schema");
+      throw error;
+    }
+  }
+);
+
+ipcMain.handle("conversations:listConversations", async () => {
+  try {
+    const conversations = await listConversations();
+    return conversations;
+  } catch (error) {
+    console.error("Failed to list conversations");
+    throw error;
+  }
+});
+
+ipcMain.handle(
+  "conversations:createConversation",
+  async (_event, initialMessage: string) => {
+    try {
+      const settings = await getSettings();
+      if (
+        !settings.aiFeatures ||
+        !settings.aiFeatures.apiKey ||
+        !settings.aiFeatures.provider
+      ) {
+        throw new Error("aiFeatures not configured");
+      }
+      const conversations = await createConversation(initialMessage, {
+        apiKey: settings.aiFeatures.apiKey,
+        provider: settings.aiFeatures.provider,
+      });
+      return conversations;
+    } catch (error) {
+      console.error("Failed to create conversation");
+      throw error;
+    }
+  }
+);
+
+ipcMain.handle(
+  "messages:createMessage",
+  async (_event, values: Omit<ConversationMessage, "id" | "createdAt">) => {
+    try {
+      const message = await createMessage(values);
+      return message;
+    } catch (error) {
+      console.error("Failed to create message");
+      throw error;
+    }
+  }
+);
+
+ipcMain.handle(
+  "messages:listMessages",
+  async (_event, conversation: number) => {
+    try {
+      const messages = await listMessages(conversation);
+      return messages;
+    } catch (error) {
+      console.error("Failed to list messages");
+      throw error;
+    }
+  }
+);
+
+ipcMain.handle(
+  "conversations:deleteConversation",
+  async (_event, conversation: number) => {
+    try {
+      await deleteConversation(conversation);
+    } catch (error) {
+      console.error("Failed to delete conversation");
       throw error;
     }
   }

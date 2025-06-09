@@ -1,4 +1,4 @@
-import { db } from "../../electron/main";
+import { db } from "../../db";
 import * as schema from "../../db/schema";
 import { Connection, Database } from "../../src/types";
 import { eq, inArray } from "drizzle-orm";
@@ -22,8 +22,9 @@ export async function getDatabase(id: number): Promise<Database> {
 }
 
 export async function createDatabase(
-  values: Omit<Database, "id">
+  values: Omit<Database, "id" | "createdAt">
 ): Promise<Database> {
+  // TODO: encrypt password
   const database = await db.insert(schema.databases).values(values).returning();
   return database[0];
 }
@@ -92,6 +93,8 @@ export async function connect(db: Database): Promise<ConnectionEntry> {
   if (existing) return existing;
 
   let entry: ConnectionEntry;
+
+  // TODO: decrypt passwords
 
   switch (db.engine) {
     case "Postgres": {

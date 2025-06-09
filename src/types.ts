@@ -14,6 +14,7 @@ export type Database = {
   engine: DatabaseEngine;
   description: string | null;
   connection: Connection;
+  createdAt: Date;
 };
 
 export type AIProvider = "Open AI" | "Anthropic";
@@ -27,3 +28,17 @@ export const SettingsObject = z.object({
 });
 
 export type Settings = z.infer<typeof SettingsObject>;
+
+export type Conversation = {
+  id: number;
+  name: string;
+  createdAt: Date;
+};
+
+export type ConversationMessage = {
+  id: number;
+  role: "assistant" | "user";
+  content: string;
+  conversation: number;
+  createdAt: Date;
+};
