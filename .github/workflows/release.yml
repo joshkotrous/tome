@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - run: npm ci --omit=dev
+      - run: npm ci
 
       - id: bump
         name: Bump version, commit, push tag
@@ -58,6 +58,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - run: npm ci
+      - run: npm install appdmg
       - run: npm run prebuild
       - run: npm run build:mac:arm64
       - run: npm run build:mac:x64
