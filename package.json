@@ -4,40 +4,34 @@
   "version": "0.0.0",
   "type": "module",
   "description": "AI Native Database client",
-"scripts": {
-  "dev": "vite",
-  "main:watch": "tsc -w",
-  "start": "npm-run-all -p dev main:watch",
-  "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-  "rebuild": "electron-rebuild -f -w better-sqlite3",
-  "clean": "rimraf dist out",
-
-  "build:renderer": "vite build",
-  "build:main": "tsc -p tsconfig.json",
-
-  "package:mac": "electron-packager . Tome --platform=darwin --arch=arm64 --out=out --icon=public/tome.icns --overwrite",
-  "dmg:mac": "electron-installer-dmg out/Tome-darwin-arm64/Tome.app Tome --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite",
-  "build:mac": "npm-run-all package:mac dmg:mac",
-
-  "package:mac:arm64": "electron-packager . Tome --platform=darwin --arch=arm64 --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite",
-  "dmg:mac:arm64":     "electron-installer-dmg out/Tome-darwin-arm64/Tome.app tome-mac-arm64 --title=Tome --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite ",
-  "build:mac:arm64":   "npm-run-all package:mac:arm64 dmg:mac:arm64",
-
-  "package:mac:x64": "electron-packager . Tome --platform=darwin --arch=x64 --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite",
-  "dmg:mac:x64":     "electron-installer-dmg out/Tome-darwin-x64/Tome.app tome-mac-intel --title=Tome --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite",
-  "build:mac:x64":   "npm-run-all package:mac:x64 dmg:mac:x64",
-
-  "package:win": "electron-packager . Tome --platform=win32 --arch=x64 --out=out --icon=public/tome.ico --overwrite",
-  "installer:win": "electron-installer-windows --src out/Tome-win32-x64/ --dest out --icon public/tome.ico --config build/win.json",
-  "build:win": "npm-run-all package:win installer:win",
-
-  "package:linux": "electron-packager . Tome --platform=linux --arch=x64 --out=out --icon=public/tome.icns --overwrite",
-  "appimage:linux": "electron-installer-appimage out/Tome-linux-x64/ --out=out",
-  "build:linux": "npm-run-all package:linux appimage:linux",
-  "prebuild": "npm-run-all clean build:renderer build:main",
-  "build": "npm-run-all prebuild build:mac:arm64 build:mac:x64 build:win build:linux",
-  "preview": "vite preview"
-},
+  "scripts": {
+    "dev": "vite",
+    "main:watch": "tsc -w",
+    "start": "npm-run-all -p dev main:watch",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "clean": "rimraf dist out",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.json",
+    "package:mac": "electron-packager . Tome --platform=darwin --arch=arm64 --out=out --icon=public/tome.icns --overwrite",
+    "dmg:mac": "electron-installer-dmg out/Tome-darwin-arm64/Tome.app Tome --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite",
+    "build:mac": "npm-run-all package:mac dmg:mac",
+    "package:mac:arm64": "electron-packager . Tome --platform=darwin --arch=arm64 --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite",
+    "dmg:mac:arm64": "electron-installer-dmg out/Tome-darwin-arm64/Tome.app tome-mac-arm64 --title=Tome --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite ",
+    "build:mac:arm64": "npm-run-all package:mac:arm64 dmg:mac:arm64",
+    "package:mac:x64": "electron-packager . Tome --platform=darwin --arch=x64 --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite",
+    "dmg:mac:x64": "electron-installer-dmg out/Tome-darwin-x64/Tome.app tome-mac-intel --title=Tome --out=out --icon=public/tome.icns --background=public/dmg-bg.png --overwrite",
+    "build:mac:x64": "npm-run-all package:mac:x64 dmg:mac:x64",
+    "package:win": "electron-packager . Tome --platform=win32 --arch=x64 --out=out --icon=public/tome.ico --overwrite",
+    "installer:win": "electron-installer-windows --src out/Tome-win32-x64/ --dest out --icon public/tome.ico --config build/win.json",
+    "build:win": "npm-run-all package:win installer:win",
+    "package:linux": "electron-packager . Tome --platform=linux --arch=x64 --out=out --icon=public/tome.icns --overwrite",
+    "appimage:linux": "electron-installer-appimage out/Tome-linux-x64/ --out=out",
+    "build:linux": "npm-run-all package:linux appimage:linux",
+    "prebuild": "npm-run-all clean build:renderer build:main",
+    "build": "npm-run-all prebuild build:mac:arm64 build:mac:x64 build:win build:linux",
+    "preview": "vite preview"
+  },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",
     "@ai-sdk/openai": "^1.3.22",
@@ -110,10 +104,9 @@
     "tailwindcss": "^4.1.8",
     "tw-animate-css": "^1.3.2",
     "typescript": "^5.2.2",
-    "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",
-    "vite-plugin-electron-renderer": "^0.14.5"
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vite": "^5.4.12"
   },
-
   "main": "dist-electron/main.js"
 }
