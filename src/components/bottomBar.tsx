@@ -1,17 +1,72 @@
-import { FileOutput, Minus } from "lucide-react";
+import { ChevronUp, Maximize, Minus } from "lucide-react";
 import { Button } from "./ui/button";
+import { useEffect, useState } from "react";
+import ResizableContainer from "./ui/resizableContainer";
+import { useQueryData } from "@/queryDataProvider";
+import QueryDisplay, { QueryStatus } from "./queryDisplay";
 
 export default function BottomBar() {
+  const [open, setOpen] = useState(true);
+  const { queryResult } = useQueryData();
+  function handleOpen() {
+    setOpen(!open);
+  }
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      // ctrl = e.metaKey
+      // cmd = e.ctrlKey
+      if (e.key === "o" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setOpen((open) => !open);
+      }
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
+
+  useEffect(() => {
+    setOpen(true);
+  }, [queryResult]);
+
   return (
-    <div className="w-full bg-zinc-900 border-t border-zinc-800 h-56 rounded-t-md">
-      <div className="w-full border-b border-zinc-800 flex items-center justify-end px-2">
-        <Minus className="text-zinc-500 hover:text-white" />
+    <ResizableContainer
+      direction="vertical"
+      defaultSize={224}
+      minSize={60}
+      maxSize={800}
+      snapThreshold={60}
+      isCollapsed={!open}
+      onCollapsedChange={(collapsed) => setOpen(!collapsed)}
+      className="bg-zinc-900 border-t border-zinc-800 rounded-t-md"
+      collapsedSize={30}
+    >
+      <div className="border-b w-full pl-3 flex justify-between items-center">
+        <QueryStatus />
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleOpen}
+            size="xs"
+            variant="ghost"
+            className="w-fit has-[>svg]:px-1"
+          >
+            {open ? (
+              <Minus className="text-zinc-500 size-5" />
+            ) : (
+              <ChevronUp className="text-zinc-500 size-5" />
+            )}
+          </Button>
+          <Button
+            onClick={() => setOpen(true)}
+            size="xs"
+            variant="ghost"
+            className="w-fit has-[>svg]:px-1"
+          >
+            <Maximize className="text-zinc-500 size-5" />
+          </Button>
+        </div>
       </div>
-      <div className="w-full border-b border-zinc-800 p-2">
-        <Button className="">
-          <FileOutput className="size-4" /> Export
-        </Button>
-      </div>
-    </div>
+      {open && <QueryDisplay />}
+    </ResizableContainer>
   );
 }

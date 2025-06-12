@@ -1,0 +1,130 @@
+name: publish-latest
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "20.x"
+
+defaults:
+  run:
+    shell: bash
+
+# ─────────────────── 0. bump version & push tag ───────────────────
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+
+      - id: bump
+        name: Bump version, commit, push tag
+        run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          VERSION="v$(node -p "require('./package.json').version")"
+
+          # create or move the tag to the current commit
+          git tag -f "$VERSION"
+          git push --force origin "$VERSION"
+
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+
+  # ─────────────────── 1. macOS (arm + intel) ───────────────────────
+  mac:
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: npm ci
+      - run: npm run dist:mac
+        env:
+          APPLETEAMID: ${{ secrets.APPLETEAMID }}
+          APPLEID: ${{ secrets.APPLEID }}
+          APPLEIDPASS: ${{ secrets.APPLEIDPASS }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - name: Upload DMGs
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          files: dist/*.dmg
+          generate_release_notes: true
+
+  # ─────────────────── 2. Windows installer ─────────────────────────
+  windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm ci
+      - run: npm run dist:win
+        env:
+          APPLETEAMID: ${{ secrets.APPLETEAMID }}
+          APPLEID: ${{ secrets.APPLEID }}
+          APPLEIDPASS: ${{ secrets.APPLEIDPASS }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - name: Upload EXE
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          files: dist/*.exe
+          generate_release_notes: false
+
+  # ─────────────────── 3. Linux AppImage ────────────────────────────
+  linux:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: sudo apt-get update && sudo apt-get install -y squashfs-tools xorriso
+      - run: npm ci
+      - run: npm run dist:linux
+        env:
+          APPLETEAMID: ${{ secrets.APPLETEAMID }}
+          APPLEID: ${{ secrets.APPLEID }}
+          APPLEIDPASS: ${{ secrets.APPLEIDPASS }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      - name: Upload AppImage
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          files: dist/*.AppImage
+          generate_release_notes: false

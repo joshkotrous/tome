@@ -6,6 +6,11 @@ import tailwindcss from "@tailwindcss/vite";
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: "./",
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
+  },
   plugins: [
     tailwindcss(),
     react(),
@@ -13,6 +18,16 @@ export default defineConfig({
       main: {
         // Shortcut of `build.lib.entry`.
         entry: "electron/main.ts",
+        vite: {
+          build: {
+            rollupOptions: {
+              external: ["keytar", "pg"],
+            },
+          },
+          optimizeDeps: {
+            exclude: ["keytar", "pg"],
+          },
+        },
       },
       preload: {
         // Shortcut of `build.rollupOptions.input`.

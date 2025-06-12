@@ -1,39 +1,163 @@
 {
-  "name": "wayfarer",
+  "name": "tome",
   "private": true,
   "version": "0.0.0",
+  "author": "Josh Kotrous",
+  "homepage": "https://tomedb.dev",
   "type": "module",
+  "description": "AI Native Database client",
+  "build": {
+    "artifactName": "tome-${os}-${arch}.${ext}",
+    "asarUnpack": ["**/*.node", "public/**", "node_modules/keytar/**","node_modules/pg/**"
+  ],
+    "extraResources": [
+      {
+        "from": "db/migrations",  
+        "to":   "db/migrations"
+      }
+    ],
+    "appId": "com.joshkotrous.tome",
+    "productName": "Tome",
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "public/**",
+      "db/**",
+      "node_modules/**",
+      "!{**/node_modules/.cache,**/*.map}"
+    ],
+    "mac": {
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "icon": "public/tome.icns",
+      "artifactName": "tome-mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "icon": "public/tome.icns",
+      "background": "public/dmg-bg.png",
+      "sign": false
+    },
+    "afterSign": "build/scripts/notarize.cjs",
+    "asar": true,
+    "extraMetadata": {
+      "main": "dist-electron/main.js"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Development",
+      "icon": "public/tome",
+      "artifactName": "tome-linux-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/tome.ico",
+      "artifactName": "tome-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
+    "main:watch": "tsc -w",
+    "start": "npm-run-all -p dev main:watch",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "clean": "rimraf dist out",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.json",
+    "dist:linux": "npm run prebuild && electron-builder --linux   --publish=never",
+    "dist:win": "npm run prebuild && electron-builder --win     --publish=never",
+    "dist:mac": "npm run prebuild && npm-run-all dist:mac:arm dist:mac:x64",
+    "dist:mac:arm": "electron-builder --mac --arm64 --publish=never",
+    "dist:mac:x64": "electron-builder --mac --x64 --publish=never",
+    "prebuild": "npm-run-all clean build:renderer build:main",
+    "preview": "vite preview",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^1.2.12",
+    "@ai-sdk/openai": "^1.3.22",
+    "@ai-sdk/react": "^1.2.12",
+    "@monaco-editor/react": "^4.7.0",
+    "@radix-ui/react-context-menu": "^2.2.15",
+    "@radix-ui/react-dialog": "^1.1.14",
+    "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-popover": "^1.1.14",
+    "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-switch": "^1.2.5",
+    "@radix-ui/react-tooltip": "^1.2.7",
     "@tailwindcss/vite": "^4.1.8",
+    "ai": "^4.3.16",
+    "better-sqlite3": "^11.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "drizzle-kit": "^0.31.1",
+    "drizzle-orm": "^0.44.1",
+    "electron-log": "^5.4.0",
+    "electron-notarize": "^1.2.2",
+    "framer-motion": "^12.16.0",
+    "keytar": "^7.9.0",
     "lucide-react": "^0.511.0",
+    "mysql": "^2.18.1",
+    "nanoid": "^5.1.5",
+    "pg": "^8.16.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "tailwind-merge": "^3.3.0"
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^15.6.1",
+    "react-window": "^1.8.11",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.3.0",
+    "zod": "^3.25.47"
   },
   "devDependencies": {
+    "@electron/notarize": "^2.5.0",
+    "@electron/packager": "^18.3.6",
     "@tailwindcss/postcss": "^4.1.8",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/mysql": "^2.15.27",
     "@types/node": "^22.15.29",
+    "@types/pg": "^8.15.3",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/react-virtualized-auto-sizer": "^1.0.4",
+    "@types/react-window": "^1.8.8",
     "@typescript-eslint/eslint-plugin": "^7.1.1",
     "@typescript-eslint/parser": "^7.1.1",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.21",
     "electron": "^30.0.1",
     "electron-builder": "^24.13.3",
+    "electron-installer-appimage": "^1.0.1",
+    "electron-installer-dmg": "^5.0.1",
+    "electron-installer-windows": "^3.0.0",
+    "electron-osx-sign": "^0.6.0",
+    "electron-packager": "^17.1.2",
+    "electron-rebuild": "^3.2.9",
+    "electron-windows-installer": "^1.7.8",
+    "electron-winstaller": "^5.4.0",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "npm-run-all": "^4.1.5",
+    "nsis": "^0.0.0",
     "postcss": "^8.5.4",
+    "rimraf": "^6.0.1",
     "tailwindcss": "^4.1.8",
     "tw-animate-css": "^1.3.2",
     "typescript": "^5.2.2",
