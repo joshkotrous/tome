@@ -8,12 +8,16 @@
   "description": "AI Native Database client",
   "build": {
     "artifactName": "tome-${os}-${arch}.${ext}",
-    "asarUnpack": ["**/*.node", "public/**", "node_modules/keytar/**","node_modules/pg/**"
-  ],
+    "asarUnpack": [
+      "**/*.node",
+      "public/**",
+      "node_modules/keytar/**",
+      "node_modules/pg/**"
+    ],
     "extraResources": [
       {
-        "from": "db/migrations",  
-        "to":   "db/migrations"
+        "from": "db/migrations",
+        "to": "db/migrations"
       }
     ],
     "appId": "com.joshkotrous.tome",
@@ -161,9 +165,9 @@
     "tailwindcss": "^4.1.8",
     "tw-animate-css": "^1.3.2",
     "typescript": "^5.2.2",
-    "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",
-    "vite-plugin-electron-renderer": "^0.14.5"
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vite": "^5.4.12"
   },
   "main": "dist-electron/main.js"
 }
