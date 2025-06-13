@@ -7,6 +7,54 @@ import { ConnectionConfig as MYSQLConnection } from "mysql";
 import { ConnectionConfig as PGConnection } from "pg";
 
 import * as mysql from "mysql";
+import * as crypto from "crypto";
+
+/**
+ * ENV variable used as key for encryption. Must be 32 bytes (256 bits) for AES-256.
+ * Set DATABASE_CRED_KEY to a securely random base64 string.
+ */
+const CRED_KEY = (() => {
+  const key = process.env.DATABASE_CRED_KEY;
+  if (!key) throw new Error("DATABASE_CRED_KEY not set in environment");
+
+  let buf: Buffer;
+  if (/^[A-Za-z0-9+/=]{43,44}$/.test(key)) {
+    // likely base64
+    buf = Buffer.from(key, "base64");
+  } else {
+    buf = Buffer.from(key, "utf-8");
+  }
+
+  if (buf.length !== 32) {
+    throw new Error("DATABASE_CRED_KEY must be 32 bytes (base64-encoded or utf-8 32 chars)");
+  }
+  return buf;
+})();
+
+function encryptPassword(plaintext: string): string {
+  // AES-256-GCM
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", CRED_KEY, iv);
+  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  // Combine IV + TAG + ciphertext; encode as base64.
+  // [12 bytes IV][16 bytes tag][...ciphertext]
+  return Buffer.concat([iv, tag, ciphertext]).toString("base64");
+}
+
+function decryptPassword(enc: string): string {
+  const data = Buffer.from(enc, "base64");
+  if (data.length < 12 + 16) {
+    throw new Error("Encrypted password format invalid");
+  }
+  const iv = data.slice(0, 12);
+  const tag = data.slice(12, 28);
+  const ciphertext = data.slice(28);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", CRED_KEY, iv);
+  decipher.setAuthTag(tag);
+  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  return plaintext.toString("utf8");
+}
 
 export async function listDatabases(): Promise<Database[]> {
   const dbs = await db.select().from(schema.databases);
@@ -24,8 +72,26 @@ export async function getDatabase(id: number): Promise<Database> {
 export async function createDatabase(
   values: Omit<Database, "id" | "createdAt">
 ): Promise<Database> {
-  // TODO: encrypt password
-  const database = await db.insert(schema.databases).values(values).returning();
+  // Encrypt the password field before saving.
+  // Assume password is at values.connection.password
+
+  let newValues: any = { ...values };
+
+  if (
+    newValues.connection &&
+    typeof newValues.connection.password === "string" &&
+    newValues.connection.password.length > 0
+  ) {
+    newValues = {
+      ...newValues,
+      connection: {
+        ...newValues.connection,
+        password: encryptPassword(newValues.connection.password),
+      },
+    };
+  }
+
+  const database = await db.insert(schema.databases).values(newValues).returning();
   return database[0];
 }
 
@@ -37,9 +103,24 @@ export async function updateDatabase(
   id: number,
   values: Partial<Database>
 ): Promise<Database> {
+  // If updating the password, encrypt it before storage.
+  let newValues: any = { ...values };
+  if (
+    newValues.connection &&
+    typeof newValues.connection.password === "string" &&
+    newValues.connection.password.length > 0
+  ) {
+    newValues = {
+      ...newValues,
+      connection: {
+        ...newValues.connection,
+        password: encryptPassword(newValues.connection.password),
+      },
+    };
+  }
   const updated = await db
     .update(schema.databases)
-    .set(values)
+    .set(newValues)
     .where(eq(schema.databases.id, id))
     .returning();
   return updated[0];
@@ -50,8 +131,14 @@ export async function testConnection(
 ): Promise<{ success: boolean; error: string }> {
   switch (db.engine) {
     case "Postgres":
-      return await testPostgresConnection(db.connection);
-      break;
+      // Ensure password is decrypted for testing
+      return await testPostgresConnection({
+        ...db.connection,
+        password:
+          typeof db.connection.password === "string"
+            ? decryptPassword(db.connection.password)
+            : db.connection.password,
+      });
     default:
       throw new Error("Unsupported engine");
   }
@@ -94,25 +181,40 @@ export async function connect(db: Database): Promise<ConnectionEntry> {
 
   let entry: ConnectionEntry;
 
-  // TODO: decrypt passwords
+  // Decrypt password before use if present (assume encrypted by create/updateDatabase)
+  let connectionForDriver: any = { ...db.connection };
+
+  if (
+    connectionForDriver &&
+    typeof connectionForDriver.password === "string" &&
+    connectionForDriver.password.length > 0
+  ) {
+    try {
+      connectionForDriver.password = decryptPassword(connectionForDriver.password);
+    } catch (err) {
+      // If decryption fails, assume it was not encrypted (legacy case), pass as-is.
+      // In production you probably want to log a warning.
+      // Optionally: throw err;
+    }
+  }
 
   switch (db.engine) {
     case "Postgres": {
-      const pool = new PgPool(db.connection as PGConnection);
+      const pool = new PgPool(connectionForDriver as PGConnection);
       await pool.query("SELECT 1"); // smoke-test
       entry = { db, driver: pool };
       break;
     }
 
     case "MySQL": {
-      const conn = mysql.createConnection(db.connection as MYSQLConnection);
+      const conn = mysql.createConnection(connectionForDriver as MYSQLConnection);
       conn.ping();
       entry = { db, driver: conn };
       break;
     }
 
     default:
-      throw new Error(`Unsupported engine ${db.engine as string}`);
+      throw new Error(`Unsupported engine ${(db.engine as string)}`);
   }
 
   connections.set(db.id, entry);
