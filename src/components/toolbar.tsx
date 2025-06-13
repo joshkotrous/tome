@@ -171,7 +171,7 @@ function ConnectionList({
             const newQuery = { id: nanoid(4), connection: i, query: "" };
 
             createQuery(newQuery);
-            setCurrrentQuery(newQuery.id);
+            setCurrrentQuery(newQuery);
           }}
         >
           {i.name}
@@ -244,6 +244,7 @@ export function AIFeaturesSettingsPage({
 }: {
   onComplete?: () => void;
 }) {
+  const { refreshSettings } = useAppData();
   const [updating, setUpdating] = useState(false);
   const [settings, setSettings] = useState<SettingsType>({
     setupComplete: false,
@@ -272,6 +273,7 @@ export function AIFeaturesSettingsPage({
     setInitialSettings(_settings);
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
     setUpdating(false);
+    refreshSettings();
     if (onComplete) {
       onComplete();
     }

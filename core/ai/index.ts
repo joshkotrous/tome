@@ -38,7 +38,7 @@ export type TomeAgentModel = TomeAnthropicAgentModel | TomeOAIAgentModel;
 
 export type ToolMap = Record<string, Tool<any, any>>;
 
-export function streamResponse(opts: {
+export interface StreamResponseOptions {
   prompt?: string;
   system?: string;
   tools?: ToolMap;
@@ -47,7 +47,11 @@ export function streamResponse(opts: {
   model: TomeAgentModel;
   messages?: Omit<Message, "id">[];
   maxSteps?: number;
-}): StreamTextResult<ToolMap, never> {
+}
+
+export function streamResponse(
+  opts: StreamResponseOptions
+): StreamTextResult<ToolMap, never> {
   const { prompt, tools = {} } = opts;
   switch (opts.provider) {
     case "Open AI":

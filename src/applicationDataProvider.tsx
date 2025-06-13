@@ -47,6 +47,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       .catch((e) => console.error(e));
     if (_settings) {
       setSettings(_settings);
+      if (_settings.aiFeatures) {
+        setAgentModeEnabled(_settings.aiFeatures.enabled);
+      }
     }
     setSettingsDataLoading(false);
   }, []);

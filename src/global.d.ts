@@ -3,7 +3,7 @@ import { Conversation, ConversationMessage, Database, Settings } from "./types";
 
 export {};
 
-interface DbAPI {
+interface DbApi {
   listDatabases: () => Promise<Database[]>;
   getDatabase: (id: number) => Promise<Database>;
   deleteDatabases: (ids: number[]) => Promise<void>;
@@ -29,19 +29,19 @@ interface DbAPI {
   getFullSchema: (db: Database, targetDb?: string) => Promise<DatabaseSchema>;
 }
 
-interface SettingsAPI {
+interface SettingsApi {
   getSettings: () => Promise<Settings>;
   updateSettings: (settings: Partial<Settings>) => Promise<Settings>;
 }
 
-interface MessagesAPI {
+interface MessagesApi {
   createMessage: (
     values: Omit<ConversationMessage, "id" | "createdAt">
   ) => Promise<ConversationMessage>;
   listMessages: (conversation: number) => Promise<ConversationMessage[]>;
 }
 
-interface ConversationsAPI {
+interface ConversationsApi {
   createConversation: (initialMessage: string) => Promise<Conversation>;
   listConversations: () => Promise<Conversation[]>;
   deleteConversation: (conversation: number) => Promise<void>;
@@ -49,9 +49,9 @@ interface ConversationsAPI {
 
 declare global {
   interface Window {
-    db: DbAPI;
-    settings: SettingsAPI;
-    messages: MessagesAPI;
-    conversations: ConversationsAPI;
+    db: DbApi;
+    settings: SettingsApi;
+    messages: MessagesApi;
+    conversations: ConversationsApi;
   }
 }

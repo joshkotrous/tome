@@ -31,6 +31,7 @@ export default function BottomBar() {
 
   return (
     <ResizableContainer
+      side="top"
       direction="vertical"
       defaultSize={224}
       minSize={60}

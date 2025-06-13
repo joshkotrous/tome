@@ -106,6 +106,7 @@ function SetupWindow() {
               Configure AI features to experience the true magic of Tome
             </DialogDescription>
             <AIFeaturesSettingsPage onComplete={() => handleComplete()} />
+            <Button onClick={() => handleComplete()}>Skip</Button>
           </>
         );
     }

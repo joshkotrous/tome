@@ -107,41 +107,21 @@ export default function ChatInterface() {
   }, [selectedConversation]);
 
   return (
-    <div className="flex flex-1 h-full min-h-0">
+    <div className="flex flex-1 h-full pb-7">
       <ConversationsList
         selectedConversation={selectedConversation}
         setSelectedConversation={setSelectedConversation}
       />
       {selectedConversation && messages.length > 0 && (
-        <div className="flex space-y-4  flex-col flex-1 h-full  pb-4 overflow-auto mx-auto w-full max-w-5xl">
-          <div className=" flex flex-col flex-1 p-4">
-            {msgs.map((i) => (
-              <div className={cn("flex", i.role === "user" && "justify-end")}>
-                <ChatMessage sendMessage={sendMessage} message={i} />
-              </div>
-            ))}
-            {thinking && <AnimatedEllipsis size="lg" />}
-          </div>
-          <div className="flex flex-col gap-2 sticky justify-center items-center w-full bottom-7 left-0 px-4">
-            <div className="max-w-2xl w-full space-y-2">
-              <div className="w-full">
-                {thinking && (
-                  <div className="flex gap-1.5 items-center text-sm">
-                    <Spinner /> Thinking...
-                  </div>
-                )}
-              </div>
-
-              <ChatInput
-                model={model}
-                onModelChange={setModel}
-                input={input}
-                setInput={setInput}
-                onSubmit={() => sendMessage({ role: "user", content: input })}
-              />
-            </div>
-          </div>
-        </div>
+        <ChatInputDisplay
+          messages={msgs}
+          thinking={thinking}
+          input={input}
+          setInput={setInput}
+          model={model}
+          setModel={setModel}
+          sendMessage={sendMessage}
+        />
       )}
       {!selectedConversation && (
         <div className="flex  flex-col flex-1 w-full  px-8 items-center justify-center">
@@ -174,6 +154,58 @@ export default function ChatInterface() {
           />
         </div>
       )}
+    </div>
+  );
+}
+
+export function ChatInputDisplay({
+  setModel,
+  model,
+  input,
+  setInput,
+  thinking,
+  messages,
+  sendMessage,
+}: {
+  messages: ConversationMessage[];
+  thinking: boolean;
+  setModel: React.Dispatch<SetStateAction<TomeAgentModel>>;
+  model: TomeAgentModel;
+  input: string;
+  setInput: React.Dispatch<SetStateAction<string>>;
+  sendMessage: (val: ChatMessage) => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-col flex-1 h-full overflow-auto mx-auto w-full max-w-5xl">
+      <div className=" flex flex-col flex-1 p-4 pb-6">
+        {messages.map((i) => (
+          <div className={cn("flex", i.role === "user" && "justify-end")}>
+            <ChatMessage sendMessage={sendMessage} message={i} />
+          </div>
+        ))}
+        {thinking && <AnimatedEllipsis size="lg" />}
+      </div>
+      <div className=" flex flex-col gap-2 sticky justify-center items-center w-full bottom-0 left-0 px-4">
+        <div className="max-w-2xl w-full space-y-2 h-40">
+          <div className="w-full h-4">{thinking && <Thinking />}</div>
+
+          <ChatInput
+            model={model}
+            onModelChange={setModel}
+            input={input}
+            setInput={setInput}
+            onSubmit={() => sendMessage({ role: "user", content: input })}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function Thinking({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex gap-1.5 items-center text-sm", className)}>
+      <Spinner /> Thinking...
     </div>
   );
 }

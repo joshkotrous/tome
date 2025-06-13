@@ -12,8 +12,8 @@ import { JsonQueryResult } from "core/database";
 export type Query = { id: string; connection: Database; query: string };
 
 interface QueryDataContextValue {
-  currentQuery: string | null;
-  setCurrrentQuery: React.Dispatch<SetStateAction<string | null>>;
+  currentQuery: Query | null;
+  setCurrrentQuery: React.Dispatch<SetStateAction<Query | null>>;
   queries: Query[];
   queryResult: JsonQueryResult | null;
   loadingQuery: boolean;
@@ -32,14 +32,14 @@ const QueryDataContext = createContext<QueryDataContextValue | undefined>(
 );
 
 export function QueryDataProvider({ children }: { children: React.ReactNode }) {
-  const [currentQuery, setCurrrentQuery] = useState<string | null>(null);
+  const [currentQuery, setCurrrentQuery] = useState<Query | null>(null);
   const [queries, setQueries] = useState<Query[]>([]);
   const [loadingQuery, setLoadingQuery] = useState(false);
   const [queryResult, setQueryResult] = useState<JsonQueryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const runQuery = useCallback(async (query: Query) => {
-    setCurrrentQuery(query.id);
+    setCurrrentQuery(query);
     setLoadingQuery(true);
     // setQueryResult(null);
     setError(null);
@@ -61,23 +61,20 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
 
   const refreshQuery = useCallback(async () => {
     if (currentQuery) {
-      const query = queries.find((i) => i.id === currentQuery);
-      if (query) {
-        await runQuery(query);
-      }
+      await runQuery(currentQuery);
     }
   }, [currentQuery, runQuery]);
 
   const createQuery = useCallback((query: Query) => {
     setQueries((queries) => [...queries, query]);
-    setCurrrentQuery(query.id);
+    setCurrrentQuery(query);
   }, []);
 
   const deleteQuery = useCallback((queryToDelete: Query) => {
     setQueries((queries) => queries.filter((query) => query !== queryToDelete));
     // If the deleted query was the current query, clear it
     setCurrrentQuery((current) => {
-      return current === queryToDelete.id ? null : current;
+      return current?.id === queryToDelete.id ? null : current;
     });
   }, []);
 
