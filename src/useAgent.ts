@@ -14,6 +14,23 @@ interface UseAgentOptions {
   setMessages?: Dispatch<SetStateAction<ConversationMessage[]>>;
 }
 
+// Utility to check if a query is read-only/safe (allow SELECT, SHOW, DESCRIBE, EXPLAIN)
+function isQuerySafe(sql: string): boolean {
+  // Remove leading whitespace and SQL comments
+  let query = sql.trim().replace(/^--.*$/gm, "").replace(/^\/\*[\s\S]*?\*\//gm, "").trim();
+  // Check first keyword
+  const match = query.match(/^([a-zA-Z]+)/);
+  if (!match) return false;
+  const firstWord = match[1].toUpperCase();
+  // Only allow these query types (extend as necessary)
+  return (
+    firstWord === "SELECT" ||
+    firstWord === "SHOW" ||
+    firstWord === "DESCRIBE" ||
+    firstWord === "EXPLAIN"
+  );
+}
+
 export function useAgent(options: UseAgentOptions = {}) {
   const { connect, connected } = useDB();
   const { runQuery } = useQueryData();
@@ -56,6 +73,13 @@ export function useAgent(options: UseAgentOptions = {}) {
     connectionId: number,
     query: string
   ) {
+    // Server-side validation: Only allow SELECT/SHOW/DESCRIBE/EXPLAIN queries
+    if (!isQuerySafe(query)) {
+      return {
+        error:
+          "Only read-only queries (SELECT, SHOW, DESCRIBE, EXPLAIN) are allowed in this interface. Destructive or mutative SQL commands are blocked.",
+      };
+    }
     const conn = await getConnection(connectionName, connectionId);
     const res = await runQuery({ id: nanoid(4), connection: conn, query });
     return res && "error" in res
