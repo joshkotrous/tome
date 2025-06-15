@@ -28,6 +28,13 @@ import {
   updateDatabase,
 } from "../core/database";
 import {
+  listQueries,
+  getQuery,
+  deleteQuery,
+  updateQuery,
+  createQuery,
+} from "../core/queries";
+import {
   createConversation,
   deleteConversation,
   listConversations,
@@ -36,10 +43,12 @@ import { createMessage, listMessages } from "../core/messages";
 import {
   ConversationMessage,
   Database as DatabaseType,
+  Query,
   Settings,
 } from "@/types";
 import log from "electron-log/main";
 import fs from "fs/promises";
+import { extractReasoningMiddleware } from "ai";
 console.log = (...args) => log.info(...args);
 console.error = (...args) => log.error(...args);
 const require = createRequire(import.meta.url);
@@ -370,9 +379,9 @@ ipcMain.handle(
 
 ipcMain.handle(
   "messages:listMessages",
-  async (_event, conversation: number) => {
+  async (_event, conversation?: number, query?: number) => {
     try {
-      const messages = await listMessages(conversation);
+      const messages = await listMessages(conversation, query);
       return messages;
     } catch (error) {
       console.error("Failed to list messages");
@@ -388,6 +397,61 @@ ipcMain.handle(
       await deleteConversation(conversation);
     } catch (error) {
       console.error("Failed to delete conversation");
+      throw error;
+    }
+  }
+);
+
+ipcMain.handle("queries:listQueries", async () => {
+  try {
+    const queries = await listQueries();
+    return queries;
+  } catch (error) {
+    console.error("Could not list queries");
+    throw error;
+  }
+});
+
+ipcMain.handle("queries:getQuery", async (_event, id: number) => {
+  try {
+    const query = await getQuery(id);
+    return query;
+  } catch (error) {
+    console.error("Could not get query");
+    throw extractReasoningMiddleware;
+  }
+});
+
+ipcMain.handle(
+  "queries:updateQuery",
+  async (_event, id: number, values: Partial<Query>) => {
+    try {
+      const query = await updateQuery(id, values);
+      return query;
+    } catch (error) {
+      console.error("Could not update query");
+      throw error;
+    }
+  }
+);
+
+ipcMain.handle("queries:deleteQuery", async (_event, id: number) => {
+  try {
+    await deleteQuery(id);
+  } catch (error) {
+    console.error("Could not delete query");
+    throw error;
+  }
+});
+
+ipcMain.handle(
+  "queries:createQuery",
+  async (_event, values: Omit<Query, "id ">) => {
+    try {
+      const query = await createQuery(values);
+      return query;
+    } catch (error) {
+      console.error("Could not create query");
       throw error;
     }
   }

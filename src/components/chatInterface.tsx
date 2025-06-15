@@ -1,5 +1,9 @@
 import {
   ArrowUp,
+  Check,
+  Database,
+  FileCode,
+  Loader2,
   MessageCircle,
   MessageCirclePlus,
   SidebarClose,
@@ -33,6 +37,7 @@ import {
   TomeOAIAgentModel,
   TomeOAIAgentModelObject,
 } from "../../core/ai";
+import { useQueryData } from "@/queryDataProvider";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -107,7 +112,7 @@ export default function ChatInterface() {
   }, [selectedConversation]);
 
   return (
-    <div className="flex flex-1 h-full pb-7">
+    <div className="flex flex-1 h-full">
       <ConversationsList
         selectedConversation={selectedConversation}
         setSelectedConversation={setSelectedConversation}
@@ -131,6 +136,7 @@ export default function ChatInterface() {
           <div className="flex justify-center flex-wrap py-2 gap-1.5 ">
             {suggestions.map((i) => (
               <div
+                key={i.name}
                 onClick={() =>
                   sendMessage({ role: "user", content: i.message })
                 }
@@ -175,19 +181,38 @@ export function ChatInputDisplay({
   setInput: React.Dispatch<SetStateAction<string>>;
   sendMessage: (val: ChatMessage) => Promise<void>;
 }) {
+  const { currentConnection, currentQuery } = useQueryData();
   return (
     <div className="flex flex-col flex-1 h-full overflow-auto mx-auto w-full max-w-5xl">
-      <div className=" flex flex-col flex-1 p-4 pb-6">
+      <div className="flex flex-col flex-1 p-4 pb-6 gap-2">
         {messages.map((i) => (
-          <div className={cn("flex", i.role === "user" && "justify-end")}>
+          <div
+            key={i.id}
+            className={cn("flex", i.role === "user" && "justify-end")}
+          >
             <ChatMessage sendMessage={sendMessage} message={i} />
           </div>
         ))}
         {thinking && <AnimatedEllipsis size="lg" />}
       </div>
       <div className=" flex flex-col gap-2 sticky justify-center items-center w-full bottom-0 left-0 px-4">
-        <div className="max-w-2xl w-full space-y-2 h-40">
-          <div className="w-full h-4">{thinking && <Thinking />}</div>
+        <div className="max-w-2xl w-full space-y-2 h-fit py-4">
+          <div className="w-full flex gap-1.5">
+            {currentQuery && (
+              <div className="w-fit text-nowrap border px-2 p-1 rounded-sm text-xs flex gap-1.5 items-center bg-zinc-900">
+                <FileCode className="size-3" />
+                {currentQuery?.title}
+              </div>
+            )}
+            {currentConnection && (
+              <div className="border px-2 p-1 rounded-sm text-xs flex gap-1.5 items-center bg-zinc-900">
+                <Database className="size-3" />
+                {currentConnection?.name}
+              </div>
+            )}
+
+            {thinking && <Thinking />}
+          </div>
 
           <ChatInput
             model={model}
@@ -437,7 +462,9 @@ function ModelPicker({
       <SelectTrigger className="border-none">{model}</SelectTrigger>
       <SelectContent className="dark">
         {models.map((i) => (
-          <SelectItem value={i}> {i}</SelectItem>
+          <SelectItem key={i} value={i}>
+            {i}
+          </SelectItem>
         ))}
       </SelectContent>
     </Select>
@@ -489,6 +516,22 @@ function ChatMessage({
   const { message: cleanedMessage, action } = useMemo(() => {
     return parseUIAction(message.content);
   }, [message.content]);
+
+  if (message.role === "tool-call") {
+    return (
+      <div className="border p-2 rounded-sm bg-zinc-900/75">
+        <div className="flex gap-1.5 items-center text-xs text-zinc-400">
+          {message.toolCallStatus === "pending" && (
+            <Loader2 className="animate-spin size-3.5 text-zinc-400" />
+          )}
+          {message.toolCallStatus === "complete" && (
+            <Check className="size-3.5 text-green-500" />
+          )}
+          Called {message.content}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

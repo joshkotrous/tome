@@ -4,13 +4,25 @@ import { useEffect, useState } from "react";
 import ResizableContainer from "./ui/resizableContainer";
 import { useQueryData } from "@/queryDataProvider";
 import QueryDisplay, { QueryStatus } from "./queryDisplay";
+import { parseBool } from "@/lib/utils";
 
 export default function BottomBar() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(
+    parseBool(localStorage.getItem("bottomBarOpen"))
+  );
   const { queryResult } = useQueryData();
   function handleOpen() {
     setOpen(!open);
   }
+
+  useEffect(() => {
+    if (queryResult) {
+      setOpen(true);
+    }
+  }, [queryResult]);
+  useEffect(() => {
+    localStorage.setItem("bottomBarOpen", String(open));
+  }, [open]);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -24,10 +36,6 @@ export default function BottomBar() {
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
   }, []);
-
-  useEffect(() => {
-    setOpen(true);
-  }, [queryResult]);
 
   return (
     <ResizableContainer

@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { Input } from "./ui/input";
 import { cn } from "@/lib/utils";
 import React, { SetStateAction, useEffect, useState } from "react";
-import { Database, Settings as SettingsType } from "@/types";
+import { Database, Query, Settings as SettingsType } from "@/types";
 import {
   CommandDialog,
   CommandEmpty,
@@ -34,7 +34,6 @@ import {
 import { useAppData } from "@/applicationDataProvider";
 import { useDB } from "@/databaseConnectionProvider";
 import { useQueryData } from "@/queryDataProvider";
-import { nanoid } from "nanoid";
 import TomeLogo from "./logos/tome";
 export default function Toolbar() {
   const { agentModeEnabled } = useAppData();
@@ -80,7 +79,12 @@ export function NewQueryButton({
     }
 
     if (connected.length === 1) {
-      const newQuery = { id: nanoid(4), connection: connected[0], query: "" };
+      const newQuery: Omit<Query, "id"> = {
+        connection: connected[0].id,
+        query: "",
+        title: "untitled",
+        createdAt: new Date(),
+      };
       createQuery(newQuery);
     }
 
@@ -122,7 +126,7 @@ function SelectConnectionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger>{children}</DialogTrigger>
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="dark max-w-2xl">
         <DialogTitle>Select Connection</DialogTitle>
         {onlyActiveConnections && (
@@ -161,17 +165,24 @@ function ConnectionList({
     <div className="border rounded-md overflow-hidden">
       {connections.map((i) => (
         <div
+          key={i.id}
           className="hover:bg-zinc-800 transition-all p-2"
-          onClick={() => {
+          onClick={async () => {
             if (setSelected) {
               setSelected(i);
             }
             onOpenChange(false);
             connect(i);
-            const newQuery = { id: nanoid(4), connection: i, query: "" };
 
-            createQuery(newQuery);
-            setCurrrentQuery(newQuery);
+            const newQuery = {
+              connection: i.id,
+              query: "",
+              title: "untitled",
+              createdAt: new Date(),
+            };
+
+            const _query = await createQuery(newQuery);
+            setCurrrentQuery(_query);
           }}
         >
           {i.name}
@@ -212,7 +223,7 @@ function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger>{children}</DialogTrigger>
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="dark max-w-2xl">
         <DialogTitle>Settings</DialogTitle>
         <DialogDescription>Manage your workspace settings</DialogDescription>
@@ -220,6 +231,7 @@ function SettingsDialog({
           <div className="h-full  flex flex-col w-36 items-end border-r pr-2 gap-2">
             {pageOptions.map((i) => (
               <Button
+                key={i.title}
                 size="sm"
                 variant="ghost"
                 onClick={() => setSelectedPage(i.title)}
@@ -429,6 +441,7 @@ function NavCmd(props: {
           <CommandGroup heading="Databases">
             {databases.map((i) => (
               <CommandItem
+                key={i.id}
                 onSelect={() => {
                   connect(i);
                   if (props.onOpenChange) {

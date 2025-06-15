@@ -1,4 +1,4 @@
-import { ConversationMessage, Database, Settings } from "@/types";
+import { ConversationMessage, Database, Query, Settings } from "@/types";
 import { ipcRenderer, contextBridge } from "electron";
 
 // --------- Expose some API to the Renderer process ---------
@@ -61,8 +61,8 @@ contextBridge.exposeInMainWorld("settings", {
 contextBridge.exposeInMainWorld("messages", {
   createMessage: (values: Omit<ConversationMessage, "id" | "createdAt">) =>
     ipcRenderer.invoke("messages:createMessage", values),
-  listMessages: (conversation: number) =>
-    ipcRenderer.invoke("messages:listMessages", conversation),
+  listMessages: (conversation?: number, query?: number) =>
+    ipcRenderer.invoke("messages:listMessages", conversation, query),
 });
 
 contextBridge.exposeInMainWorld("conversations", {
@@ -72,4 +72,14 @@ contextBridge.exposeInMainWorld("conversations", {
     ipcRenderer.invoke("conversations:listConversations"),
   deleteConversation: (conversation: number) =>
     ipcRenderer.invoke("conversations:deleteConversation", conversation),
+});
+
+contextBridge.exposeInMainWorld("queries", {
+  listQueries: () => ipcRenderer.invoke("queries:listQueries"),
+  getQuery: (id: number) => ipcRenderer.invoke("queries:getQuery", id),
+  updateQuery: (id: number, values: Partial<Query>) =>
+    ipcRenderer.invoke("queries:updateQuery", id, values),
+  deleteQuery: (id: number) => ipcRenderer.invoke("queries:deleteQuery", id),
+  createQuery: (values: Omit<Query, "id">) =>
+    ipcRenderer.invoke("queries:createQuery", values),
 });

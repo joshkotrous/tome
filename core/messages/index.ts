@@ -17,12 +17,28 @@ export async function createMessage(
 }
 
 export async function listMessages(
-  conversation: number
+  conversation?: number,
+  query?: number
 ): Promise<ConversationMessage[]> {
-  const messages = await db
-    .select()
-    .from(schema.messages)
-    .where(eq(schema.messages.conversation, conversation))
-    .orderBy(asc(schema.messages.createdAt));
-  return messages;
+  console.log(query);
+
+  if (conversation) {
+    const messages = await db
+      .select()
+      .from(schema.messages)
+      .where(eq(schema.messages.conversation, conversation))
+      .orderBy(asc(schema.messages.createdAt));
+    return messages;
+  }
+
+  if (query) {
+    const messages = await db
+      .select()
+      .from(schema.messages)
+      .where(eq(schema.messages.query, query))
+      .orderBy(asc(schema.messages.createdAt));
+    return messages;
+  }
+
+  throw new Error("One of conversation or message must be provided");
 }

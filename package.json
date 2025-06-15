@@ -8,12 +8,16 @@
   "description": "AI Native Database client",
   "build": {
     "artifactName": "tome-${os}-${arch}.${ext}",
-    "asarUnpack": ["**/*.node", "public/**", "node_modules/keytar/**","node_modules/pg/**"
-  ],
+    "asarUnpack": [
+      "**/*.node",
+      "public/**",
+      "node_modules/keytar/**",
+      "node_modules/pg/**"
+    ],
     "extraResources": [
       {
-        "from": "db/migrations",  
-        "to":   "db/migrations"
+        "from": "db/migrations",
+        "to": "db/migrations"
       }
     ],
     "appId": "com.joshkotrous.tome",
@@ -85,6 +89,7 @@
     "prebuild": "npm-run-all clean build:renderer build:main",
     "preview": "vite preview",
     "postinstall": "electron-builder install-app-deps"
+
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",

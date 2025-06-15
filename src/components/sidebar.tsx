@@ -41,7 +41,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "./ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, parseBool } from "@/lib/utils";
 import PostgresLogo from "./logos/postgres";
 import { useDB } from "@/databaseConnectionProvider";
 import Spinner from "./ui/spinner";
@@ -51,7 +51,13 @@ import { useAppData } from "@/applicationDataProvider";
 import { ColumnDef, TableDef } from "core/database";
 
 export default function Sidebar() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(
+    parseBool(localStorage.getItem("sidebarOpen"))
+  );
+
+  useEffect(() => {
+    localStorage.setItem("sidebarOpen", String(open));
+  }, [open]);
 
   function handleOpen() {
     setOpen((open) => !open);

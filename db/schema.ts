@@ -22,10 +22,25 @@ export const conversations = sqliteTable("conversations", {
 
 export const messages = sqliteTable("messages", {
   id: integer("id").primaryKey({ autoIncrement: true }).notNull(),
-  role: text("role", { enum: ["assistant", "user"] }).notNull(),
+  role: text("role", { enum: ["assistant", "user", "tool-call"] }).notNull(),
   content: text().notNull(),
-  conversation: integer()
-    .notNull()
-    .references(() => conversations.id, { onDelete: "cascade" }),
+  conversation: integer().references(() => conversations.id, {
+    onDelete: "cascade",
+  }),
+  query: integer().references(() => queries.id, { onDelete: "cascade" }),
+  toolCallId: text(),
+  toolCallStatus: text("toolCallStatus", {
+    enum: ["pending", "error", "complete"],
+  }),
   createdAt: integer({ mode: "timestamp" }).notNull(),
+});
+
+export const queries = sqliteTable("queries", {
+  id: integer("id").primaryKey({ autoIncrement: true }).notNull(),
+  connection: integer()
+    .notNull()
+    .references(() => databases.id),
+  query: text().notNull(),
+  createdAt: integer({ mode: "timestamp" }).notNull(),
+  title: text().notNull(),
 });

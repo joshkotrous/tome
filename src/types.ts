@@ -38,8 +38,19 @@ export type Conversation = {
 
 export type ConversationMessage = {
   id: number;
-  role: "assistant" | "user";
+  role: "assistant" | "user" | "tool-call";
   content: string;
-  conversation: number;
+  conversation: number | null;
+  query: number | null;
+  toolCallId: string | null;
+  toolCallStatus: "pending" | "error" | "complete" | null;
   createdAt: Date;
+};
+
+export type Query = {
+  id: number;
+  connection: number;
+  query: string;
+  createdAt: Date;
+  title: string;
 };
