@@ -43,12 +43,12 @@ import {
 } from "./ui/dialog";
 import { cn, parseBool } from "@/lib/utils";
 import PostgresLogo from "./logos/postgres";
-import { useDB } from "@/databaseConnectionProvider";
 import Spinner from "./ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Kbd } from "./toolbar";
 import { useAppData } from "@/applicationDataProvider";
 import { ColumnDef, TableDef } from "core/database";
+import { useQueryData } from "@/queryDataProvider";
 
 export default function Sidebar() {
   const [open, setOpen] = useState(
@@ -197,7 +197,7 @@ function ConnectionListItem({
 }
 
 export function DBInformation({ db }: { db: Database }) {
-  const { connected, loading } = useDB();
+  const { connected, loadingDb: loading } = useQueryData();
 
   function displayLogo(engine: DatabaseEngine) {
     switch (engine) {
@@ -221,7 +221,7 @@ export function DBInformation({ db }: { db: Database }) {
 }
 
 function DatabaseList({ connection }: { connection: Database }) {
-  const { connected } = useDB();
+  const { connected } = useQueryData();
   const [databases, setDatabases] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -537,7 +537,7 @@ function ConnectionListContextMenu({
   item?: Database;
   setSelected?: React.Dispatch<SetStateAction<Database | null>>;
 }) {
-  const { connect, disconnect, error, setError, connected } = useDB();
+  const { connect, disconnect, error, setError, connected } = useQueryData();
 
   const [editConnectionOpen, setEditConnectionOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);

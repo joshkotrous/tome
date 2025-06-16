@@ -8,17 +8,17 @@ import {
 import MonacoEditor, { OnMount } from "@monaco-editor/react";
 
 import * as monacoEditor from "monaco-editor";
-import { FileCode, Play, RefreshCcw, Sparkles, X } from "lucide-react";
+import { FileCode, Play, Plus, RefreshCcw, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { Textarea } from "./ui/textarea";
+// import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+// import { Textarea } from "./ui/textarea";
 import { Kbd, NewQueryButton } from "./toolbar";
 import { useQueryData } from "@/queryDataProvider";
 import { useAppData } from "@/applicationDataProvider";
 import AddDatabaseButton from "./addDatabaseButton";
 import { cn, parseBool } from "@/lib/utils";
-import ChatInterface, { ChatInputDisplay, Thinking } from "./chatInterface";
+import ChatInterface, { ChatInputDisplay } from "./chatInterface";
 import { Switch } from "./ui/switch";
 import { AnimatePresence, motion } from "framer-motion";
 import { streamResponse, TomeAgentModel, ToolMap } from "../../core/ai";
@@ -27,7 +27,8 @@ import ResizableContainer from "./ui/resizableContainer";
 import { ConversationMessage, Query } from "@/types";
 import { z } from "zod";
 import { tool } from "ai";
-import { useDB } from "@/databaseConnectionProvider";
+import { DBInformation } from "./sidebar";
+import { createSchemaCompletionProvider } from "./monacoConfig";
 
 export default function QueryInterface() {
   const { agentModeEnabled, setAgentModeEnabled, settings } = useAppData();
@@ -82,7 +83,7 @@ export default function QueryInterface() {
 export function SqlEditor() {
   const { queries, currentQuery, runQuery, updateQuery, currentConnection } =
     useQueryData();
-  const [query, setQuery] = useState<Query | null>(null);
+  const [schema, setSchema] = useState<DatabaseSchema | null>(null);
   const [queryContent, setQueryContent] = useState("");
   const { databases } = useAppData();
   const [thinking, setThinking] = useState(false);
@@ -104,30 +105,23 @@ export function SqlEditor() {
     [currentQuery, updateQuery]
   );
 
-  // Enhanced handleGeneratedQueryChange specifically for the popover
-  const handleGeneratedQueryChange = useCallback(
-    (value: string) => {
-      if (currentQuery) {
-        const updatedQuery = {
-          ...currentQuery,
-          query: value,
-        };
-        updateQuery(updatedQuery);
-        // Also update local state to ensure consistency
-        setQuery(updatedQuery);
-      }
-    },
-    [currentQuery, updateQuery]
-  );
-
   useEffect(() => {
     if (currentQuery) {
       setQueryContent(currentQuery?.query);
     }
   }, [currentQuery]);
 
+  async function getData() {
+    if (currentConnection) {
+      const _schema = await window.db.getFullSchema(currentConnection);
+      console.log(JSON.stringify(schema, null, 2));
+      setSchema(_schema);
+    }
+  }
+
   // Handle container resize to update Monaco layout
   useEffect(() => {
+    getData();
     const handleResize = () => {
       if (editorRef.current) {
         // Small delay to ensure DOM has updated
@@ -148,20 +142,39 @@ export function SqlEditor() {
     return () => {
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [getData]);
 
   useEffect(() => {
     handleChange(queryContent);
   }, [queryContent]);
 
-  const handleMount: OnMount = (editor, monaco) => {
+  const handleMount: OnMount = async (editor, monaco) => {
     editorRef.current = editor;
+    monaco.editor.defineTheme("zinc-dark", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [],
+      colors: {
+        "editor.background": "#09090b",
+        "editorGutter.background": "#09090b",
+        "editorLineNumber.foreground": "#4b5563",
+        "editorLineNumber.activeForeground": "#f4f4f5",
+      },
+    });
+    monaco.editor.setTheme("zinc-dark");
+
+    if (!currentConnection) return;
+    const _schema = await window.db.getFullSchema(currentConnection);
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () =>
       console.log("Run query →", editor.getValue())
     );
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () =>
       editor.trigger("keyboard", "editor.action.triggerSuggest", undefined)
+    );
+    const disposable = monaco.languages.registerCompletionItemProvider(
+      "sql",
+      createSchemaCompletionProvider(_schema, currentConnection)
     );
 
     monaco.languages.registerCompletionItemProvider("sql", {
@@ -192,18 +205,7 @@ export function SqlEditor() {
       },
     });
 
-    monaco.editor.defineTheme("zinc-dark", {
-      base: "vs-dark",
-      inherit: true,
-      rules: [],
-      colors: {
-        "editor.background": "#09090b",
-        "editorGutter.background": "#09090b",
-        "editorLineNumber.foreground": "#4b5563",
-        "editorLineNumber.activeForeground": "#f4f4f5",
-      },
-    });
-    monaco.editor.setTheme("zinc-dark");
+    return disposable;
   };
 
   if (databases.length === 0) {
@@ -242,7 +244,7 @@ export function SqlEditor() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <QueryTabs />
         <div className="w-full border-b border-zinc-800 p-2 font-mono text-xs text-zinc-500 flex items-center gap-2">
-          {/* {query && <DBInformation db={query.connection} />} */}
+          {currentConnection && <DBInformation db={currentConnection} />}
           <div className="flex items-center gap-1">
             <Tooltip delayDuration={700}>
               <TooltipTrigger>
@@ -272,7 +274,7 @@ export function SqlEditor() {
                 Clear query <Kbd cmd="⌘C" />
               </TooltipContent>
             </Tooltip>
-            <GenerateQueryPopover
+            {/* <GenerateQueryPopover
               isGenerating={thinking}
               setIsGenerating={setThinking}
               value={query?.query ?? ""}
@@ -289,38 +291,41 @@ export function SqlEditor() {
                   Generate query <Kbd cmd="⌘G" />
                 </TooltipContent>
               </Tooltip>
-            </GenerateQueryPopover>
+            </GenerateQueryPopover> */}
           </div>
         </div>
         <div className="flex-1 w-full min-h-0">
-          <MonacoEditor
-            height="100%"
-            defaultLanguage="sql"
-            theme="zinc-dark"
-            value={queryContent}
-            onChange={(e) => setQueryContent(e ?? "")}
-            onMount={handleMount}
-            options={{
-              minimap: { enabled: false },
-              wordWrap: "on",
-              fontSize: 14,
-              tabSize: 2,
-              // Key options to fix the resizing issue:
-              automaticLayout: true, // Automatically layout when container resizes
-              scrollBeyondLastLine: false,
-              overviewRulerLanes: 0, // Disable overview ruler
-              hideCursorInOverviewRuler: true,
-              overviewRulerBorder: false,
-              // Prevent Monaco from interfering with mouse events outside the editor
-              mouseWheelZoom: false,
-              contextmenu: false, // Disable right-click menu to prevent event conflicts
-            }}
-            className="bg-zinc-950"
-          />
+          {currentConnection && (
+            <MonacoEditor
+              height="100%"
+              defaultLanguage="sql"
+              theme="zinc-dark"
+              value={queryContent}
+              onChange={(e) => setQueryContent(e ?? "")}
+              onMount={handleMount}
+              options={{
+                minimap: { enabled: false },
+                wordWrap: "on",
+                fontSize: 14,
+                tabSize: 2,
+                // Key options to fix the resizing issue:
+                automaticLayout: true, // Automatically layout when container resizes
+                scrollBeyondLastLine: false,
+                overviewRulerLanes: 0, // Disable overview ruler
+                hideCursorInOverviewRuler: true,
+                overviewRulerBorder: false,
+                // Prevent Monaco from interfering with mouse events outside the editor
+                mouseWheelZoom: false,
+                contextmenu: false, // Disable right-click menu to prevent event conflicts
+              }}
+              className="bg-zinc-950"
+            />
+          )}
         </div>
       </div>
 
       <EditorAgent
+        schema={schema}
         query={queryContent}
         onQueryChange={setQueryContent}
         thinking={thinking}
@@ -331,25 +336,36 @@ export function SqlEditor() {
 }
 
 function EditorAgent({
+  schema,
   query,
   onQueryChange,
   thinking,
   setThinking,
 }: {
+  schema: DatabaseSchema | null;
   query: string;
   onQueryChange: React.Dispatch<SetStateAction<string>>;
   thinking: boolean;
   setThinking: React.Dispatch<SetStateAction<boolean>>;
 }) {
-  const { runQuery, currentQuery, queryMessages } = useQueryData();
+  const {
+    runQuery,
+    currentQuery,
+    queryMessages,
+    currentConnection,
+    connect,
+    connected,
+  } = useQueryData();
   const { settings, databases } = useAppData();
   const [collapsed, setCollapsed] = useState(
     parseBool(localStorage.getItem("editorAgentOpen"))
   );
   const [input, setInput] = useState("");
-  const [model, setModel] = useState<TomeAgentModel>("gpt-4o");
+  const [model, setModel] = useState<TomeAgentModel>({
+    provider: "Open AI",
+    name: "gpt-4o",
+  });
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
-  const { connect, connected } = useDB();
 
   useEffect(() => {
     setMessages(queryMessages);
@@ -359,6 +375,42 @@ function EditorAgent({
   useEffect(() => {
     localStorage.setItem("editorAgentOpen", String(collapsed));
   }, [collapsed]);
+
+  async function getConnection(connectionName: string, connectionId: number) {
+    let conn =
+      connected.find(
+        (i) => i.name === connectionName && i.id === connectionId
+      ) ?? null;
+    if (!conn) {
+      const db = databases.find((i) => i.id === connectionId);
+      if (!db) {
+        throw new Error(`Could not find ${connectionId}`);
+      }
+      conn = await connect(db);
+    }
+    if (!conn) {
+      throw new Error(`Could not connect to ${connectionId}:${connectionName}`);
+    }
+    return conn;
+  }
+
+  async function getFullSchema(connectionName: string, connectionId: number) {
+    const conn = await getConnection(connectionName, connectionId);
+    const schema = await window.db.getFullSchema(conn);
+    return schema;
+  }
+
+  async function executeQuery(
+    connectionName: string,
+    connectionId: number,
+    query: string
+  ) {
+    const conn = await getConnection(connectionName, connectionId);
+    const res = await runQuery(conn, query);
+    return res && "error" in res
+      ? res
+      : { totalCount: res?.rowCount, records: res?.rows.splice(0, 5) ?? [] };
+  }
 
   async function sendMessage() {
     setThinking(true);
@@ -376,74 +428,55 @@ function EditorAgent({
     setMessages(newMessages);
     if (
       !settings?.aiFeatures.enabled ||
-      !settings.aiFeatures.provider ||
-      !settings.aiFeatures.apiKey
+      (!settings.aiFeatures.providers.openai.enabled &&
+        !settings.aiFeatures.providers.anthropic.enabled)
     )
       return;
 
     const queryObject = z.object({
       queryInstrucions: z
         .string()
-        .describe("Instructions on what query to generate"),
+        .describe(
+          "Instructions on what query to generate. Include context from the schema about the query to generate"
+        ),
     });
-
-    async function getConnection(connectionName: string, connectionId: number) {
-      let conn =
-        connected.find(
-          (i) => i.name === connectionName && i.id === connectionId
-        ) ?? null;
-      if (!conn) {
-        const db = databases.find((i) => i.id === connectionId);
-        if (!db) {
-          throw new Error(`Could not find ${connectionId}`);
-        }
-        conn = await connect(db);
-      }
-      if (!conn) {
-        throw new Error(
-          `Could not connect to ${connectionId}:${connectionName}`
-        );
-      }
-      return conn;
-    }
-
-    async function getFullSchema(connectionName: string, connectionId: number) {
-      const conn = await getConnection(connectionName, connectionId);
-      const schema = await window.db.getFullSchema(conn);
-      return schema;
-    }
-
-    async function executeQuery(
-      connectionName: string,
-      connectionId: number,
-      query: string
-    ) {
-      const conn = await getConnection(connectionName, connectionId);
-      const res = await runQuery(conn, query);
-      return res && "error" in res
-        ? res
-        : { totalCount: res?.rowCount, records: res?.rows.splice(0, 5) ?? [] };
-    }
 
     const tools: ToolMap = {
       updateQuery: tool({
-        description: "A secondary agent to use to update the query",
+        description:
+          "A secondary agent to use to update the query. If there is an existing query, be sure its included in the newly generated version",
         parameters: queryObject,
         execute: async ({ queryInstrucions }) => {
           if (
-            !settings.aiFeatures.enabled ||
-            !settings.aiFeatures.apiKey ||
-            !settings.aiFeatures.provider
+            !settings?.aiFeatures.enabled ||
+            (!settings.aiFeatures.providers.openai.enabled &&
+              !settings.aiFeatures.providers.anthropic.enabled)
           )
             return;
+          console.log("INSTRUCTIONs", queryInstrucions);
+          onQueryChange("");
           const streamResult = streamResponse({
-            apiKey: settings.aiFeatures.apiKey,
-            model,
+            apiKey:
+              model.provider === "Open AI"
+                ? settings.aiFeatures.providers.openai.apiKey
+                : settings.aiFeatures.providers.anthropic.apiKey,
+            model: model.name,
             toolCallStreaming: true,
-            provider: settings.aiFeatures.provider,
+            provider: model.provider,
 
             messages: [{ role: "user", content: queryInstrucions }],
-            system: `You are a helpful database administrator embedded in a database client. You are provided with instructions on what query to generate and you are to generate the query only. No prose or backticks. Include 2 new lines at the end`,
+            system: `You are a helpful database administrator embedded in a database client. You are provided with instructions on what query to generate and you are to generate the query only. No prose or backticks. Include 2 new lines at the end. This is the currently connected database: ${JSON.stringify(
+              currentConnection,
+              null,
+              2
+            )} Here is the full database schema ${JSON.stringify(
+              schema,
+              null,
+              2
+            )}
+            
+            QUERY CONSIDERATIONS:
+            1. If the engine is Postgres, any column names or table names in camel case MUST be surrounded by double quotes.`,
             onChunk: ({ chunk }) => {
               if (chunk.type === "text-delta") {
                 onQueryChange((prev) => prev + chunk.textDelta);
@@ -487,11 +520,15 @@ function EditorAgent({
       }),
     };
 
+    console.log(query);
     const streamResult = streamResponse({
-      apiKey: settings.aiFeatures.apiKey,
-      model,
+      apiKey:
+        model.provider === "Open AI"
+          ? settings.aiFeatures.providers.openai.apiKey
+          : settings.aiFeatures.providers.anthropic.apiKey,
+      model: model.name,
       toolCallStreaming: true,
-      provider: settings.aiFeatures.provider,
+      provider: model.provider,
       tools,
       messages: newMessages
         .filter((i) => i.role !== "tool-call")
@@ -499,11 +536,27 @@ function EditorAgent({
           ...k,
           role: k.role as "user" | "assistant",
         })),
-      system: `You are a helpful database administrator embedded in a database client. Assist the user with any help they need with their database. This is the current query ${query}. The available databases are ${JSON.stringify(
-        databases,
+      system: `You are a helpful database administrator embedded in a database client. Assist the user with any help they need with their database.\nThis is the current query: <current_query>${query}</current_query>.\nThe currently connected database is ${JSON.stringify(
+        currentConnection,
         null,
         2
-      )} TOOL USE INSTRUCTIONS:\n1. When a user asks you to write a query, generally default to updating it by using the updateQuery tool \n2. Default to not outputting the query, the update query tool is updating the query within a code editor embedded in the client that is visible to the user.\n3. Use the getSchema tool to get the full schema from the database to assist you in writing the query.`,
+      )}
+      
+      The current query within the tags is the query currently displayed in the editor. If the user asks questions about the current query, or without much context. This is the query they're talking about. In this case, dont refer to queries in previous messages unless specifically asked by the user. 
+      BEHAVIOR GUIDELINES:
+      1. When a user is asking about a query, they're asking about the contents query in the **editor**, which is within <current_query>. This should be the basis of any of your explanations.
+      2. Only refer to queries in previous messages if specifically asked by the user. Again they're generally asking about the contents within the editor by default, which is stored in <current_query>
+
+      TOOL USE INSTRUCTIONS:
+      1. When a user asks you to write a query, generally default to updating it by using the updateQuery tool
+      2. When asked to write a query dont output it, use the update query tool to update the query within the code editor embedded in the client that is visible to the user.
+      3. Use the getSchema tool to get the full schema from the database to assist you in writing the query.
+      4. When using the sub agent to generate a query, provide full and complete instructions with context from the schema to ensure it is production ready and works as expected.
+      5. Use the runQuery tool to run the generated query and test to ensure its valid. If you encounter an error, update the query to fix it.
+      6. If adjustments to the query are required, make sure to run updateQuery with the final updated query
+      
+      QUERY CONSIDERATIONS:
+      1. If the engine is Postgres, any column names or table names in camel case MUST be surrounded by double quotes.`,
       onChunk: ({ chunk }) => {
         if (chunk.type === "text-delta") {
           setMessages((m) => {
@@ -540,7 +593,7 @@ function EditorAgent({
               {
                 id: Date.now(),
                 role: "tool-call",
-                content: toolName,
+                content: `${toolName}`,
                 toolCallId,
                 toolCallStatus: "pending",
                 createdAt: new Date(),
@@ -573,7 +626,7 @@ function EditorAgent({
           });
           if (currentQuery) {
             window.messages.createMessage({
-              content: `Called ${toolName}`,
+              content: `${toolName}`,
               query: currentQuery?.id,
               role: "tool-call",
               toolCallId: toolCallId,
@@ -612,13 +665,13 @@ function EditorAgent({
       maxSize={800}
       snapThreshold={60}
       side="left"
-      className="h-full border-l rounded-l-lg"
+      className="h-full border-l rounded-l-lg bg-zinc-900/50"
     >
       {collapsed && (
         <Button
           onClick={() => setCollapsed((prev) => !prev)}
           variant="ghost"
-          className="has-[>svg]:px-1.5 left-1 relative text-zinc-400"
+          className="has-[>svg]:px-1.5 left-1 top-1 h-fit py-1 relative text-zinc-400"
         >
           <FileCode className="size-4 " />
         </Button>
@@ -637,6 +690,7 @@ function EditorAgent({
           </div>
 
           <ChatInputDisplay
+            showQueryControls
             thinking={thinking}
             messages={messages}
             input={input}
@@ -769,137 +823,162 @@ function QueryTab({
   );
 }
 
-// Main QueryTabs Component
 function QueryTabs() {
-  const { queries, deleteQuery, setCurrrentQuery, currentQuery, updateQuery } =
-    useQueryData();
+  const {
+    queries,
+    deleteQuery,
+    setCurrentQuery,
+    currentQuery,
+    updateQuery,
+    createQuery,
+    currentConnection,
+  } = useQueryData();
 
   return (
-    <div className="border-b flex overflow-x-auto min-h-8">
+    <div className="border-b flex overflow-x-auto min-h-8 items-center ">
       {queries.map((query) => (
         <QueryTab
           key={query.id}
           query={query}
           isSelected={currentQuery?.id === query.id}
-          onSelect={setCurrrentQuery}
+          onSelect={setCurrentQuery}
           onDelete={deleteQuery}
           onUpdate={updateQuery}
         />
       ))}
+      <Tooltip delayDuration={700}>
+        <TooltipTrigger>
+          <Button
+            onClick={() => {
+              if (!currentConnection) return;
+              createQuery({
+                connection: currentConnection?.id,
+                createdAt: new Date(),
+                query: "",
+                title: "untitled",
+              });
+            }}
+            size="xs"
+            className="h-fit !p-1 ml-2 sticky right-1"
+          >
+            <Plus className="size-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>New query</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
-export function GenerateQueryPopover({
-  setIsGenerating,
-  isGenerating,
-  children,
-  value,
-  onChange,
-}: {
-  setIsGenerating: React.Dispatch<SetStateAction<boolean>>;
-  isGenerating: boolean;
-  children: React.ReactNode;
-  value: string;
-  onChange: (val: string) => void;
-}) {
-  const { currentQuery, currentConnection } = useQueryData();
+// export function GenerateQueryPopover({
+//   setIsGenerating,
+//   isGenerating,
+//   children,
+//   value,
+//   onChange,
+// }: {
+//   setIsGenerating: React.Dispatch<SetStateAction<boolean>>;
+//   isGenerating: boolean;
+//   children: React.ReactNode;
+//   value: string;
+//   onChange: (val: string) => void;
+// }) {
+//   const { currentQuery, currentConnection } = useQueryData();
 
-  const [schema, setSchema] = useState<DatabaseSchema | null>(null);
+//   const [schema, setSchema] = useState<DatabaseSchema | null>(null);
 
-  const { settings } = useAppData();
-  const [input, setInput] = useState("");
-  const [open, setOpen] = useState(false);
+//   const { settings } = useAppData();
+//   const [input, setInput] = useState("");
+//   const [open, setOpen] = useState(false);
 
-  const [loadingSchema, setLoadingSchema] = useState(false);
+//   const [loadingSchema, setLoadingSchema] = useState(false);
 
-  async function submit() {
-    setOpen(false);
-    if (
-      !settings?.aiFeatures ||
-      !settings.aiFeatures.provider ||
-      !settings.aiFeatures.apiKey
-    ) {
-      return;
-    }
+//   async function submit() {
+//     setOpen(false);
+//     if (
+//       !settings?.aiFeatures.enabled ||
+//       (!settings.aiFeatures.providers.openai.enabled &&
+//         !settings.aiFeatures.providers.anthropic.enabled)
+//     )
+//       return;
 
-    setIsGenerating(true);
+//     setIsGenerating(true);
 
-    try {
-      const streamResult = streamResponse({
-        apiKey: settings.aiFeatures.apiKey,
-        provider: settings.aiFeatures.provider,
-        model: "gpt-4o",
-        prompt: `${value}\n${input}`,
-        system: `You are a SQL query generator. Generate a SQL query based on the user's request. Only return the SQL query without any additional text or formatting. Do not include backticks or \`\`\`sql tags, you're working directly in an editor. \n GUIDELINES: 1. Remember when using postgres and you encounter a column in camel case, it MUST be surrounded by double quotes.\n2. Do NOT include placeholder values, all queries must be valid  \n See below for the full database schema and connection information:\nEngine:\n${
-          currentConnection?.engine
-        }\n${JSON.stringify(schema, null, 2)}`,
-      });
+//     try {
+//       const streamResult = streamResponse({
+//         apiKey: settings.aiFeatures.apiKey,
+//         provider: settings.aiFeatures.provider,
+//         model: "gpt-4o",
+//         prompt: `${value}\n${input}`,
+//         system: `You are a SQL query generator. Generate a SQL query based on the user's request. Only return the SQL query without any additional text or formatting. Do not include backticks or \`\`\`sql tags, you're working directly in an editor. \n GUIDELINES: 1. Remember when using postgres and you encounter a column in camel case, it MUST be surrounded by double quotes.\n2. Do NOT include placeholder values, all queries must be valid  \n See below for the full database schema and connection information:\nEngine:\n${
+//           currentConnection?.engine
+//         }\n${JSON.stringify(schema, null, 2)}`,
+//       });
 
-      // Start with empty content and build it up
-      let generatedContent = "";
+//       // Start with empty content and build it up
+//       let generatedContent = "";
 
-      for await (const textPart of streamResult.textStream) {
-        generatedContent += textPart;
-        // Update the current query with the accumulated content
-        onChange(generatedContent);
-      }
+//       for await (const textPart of streamResult.textStream) {
+//         generatedContent += textPart;
+//         // Update the current query with the accumulated content
+//         onChange(generatedContent);
+//       }
 
-      // Reset input after successful generation
-      setInput("");
-    } catch (error) {
-      console.error("Error generating query:", error);
-    } finally {
-      setIsGenerating(false);
-    }
-  }
+//       // Reset input after successful generation
+//       setInput("");
+//     } catch (error) {
+//       console.error("Error generating query:", error);
+//     } finally {
+//       setIsGenerating(false);
+//     }
+//   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      submit();
-    }
-  };
+//   const handleKeyDown = (e: React.KeyboardEvent) => {
+//     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+//       e.preventDefault();
+//       submit();
+//     }
+//   };
 
-  async function getFullSchema() {
-    setLoadingSchema(true);
-    if (!currentQuery) return;
-    const connection = await window.db.getDatabase(currentQuery.connection);
-    const _schema = await window.db.getFullSchema(connection);
-    setSchema(_schema);
-    setLoadingSchema(false);
-  }
+//   async function getFullSchema() {
+//     setLoadingSchema(true);
+//     if (!currentQuery) return;
+//     const connection = await window.db.getDatabase(currentQuery.connection);
+//     const _schema = await window.db.getFullSchema(connection);
+//     setSchema(_schema);
+//     setLoadingSchema(false);
+//   }
 
-  useEffect(() => {
-    getFullSchema();
-  }, [currentQuery]);
+//   useEffect(() => {
+//     getFullSchema();
+//   }, [currentQuery]);
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger>{children}</PopoverTrigger>
-      <PopoverContent className="dark text-sm space-y-2">
-        <h2 className="font-bold">Generate Query</h2>
-        <Textarea
-          disabled={loadingSchema}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            loadingSchema
-              ? "Loading schema..."
-              : "What would you like to query?"
-          }
-          autoFocus
-        />
-        <Button
-          className="w-full"
-          size="xs"
-          variant="secondary"
-          onClick={submit}
-          disabled={isGenerating || !input.trim()}
-        >
-          {isGenerating ? "Generating..." : "Generate Query"}
-        </Button>
-      </PopoverContent>
-    </Popover>
-  );
-}
+//   return (
+//     <Popover open={open} onOpenChange={setOpen}>
+//       <PopoverTrigger>{children}</PopoverTrigger>
+//       <PopoverContent className="dark text-sm space-y-2">
+//         <h2 className="font-bold">Generate Query</h2>
+//         <Textarea
+//           disabled={loadingSchema}
+//           value={input}
+//           onChange={(e) => setInput(e.target.value)}
+//           onKeyDown={handleKeyDown}
+//           placeholder={
+//             loadingSchema
+//               ? "Loading schema..."
+//               : "What would you like to query?"
+//           }
+//           autoFocus
+//         />
+//         <Button
+//           className="w-full"
+//           size="xs"
+//           variant="secondary"
+//           onClick={submit}
+//           disabled={isGenerating || !input.trim()}
+//         >
+//           {isGenerating ? "Generating..." : "Generate Query"}
+//         </Button>
+//       </PopoverContent>
+//     </Popover>
+//   );
+// }

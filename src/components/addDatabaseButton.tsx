@@ -286,6 +286,17 @@ export function TestConnectionButton({
   );
 }
 
+export function getEngineLogo(engine: DatabaseEngine) {
+  switch (engine) {
+    case "Postgres":
+      return <PostgresLogo className="size-20" />;
+    case "MySQL":
+      return <MySQLLogo className="size-30" />;
+    case "SQLite":
+      return <SQLiteLogo className="size-20" />;
+  }
+}
+
 function SelectDatabaseEngine({
   engine,
   setEngine,
@@ -293,17 +304,6 @@ function SelectDatabaseEngine({
   engine: DatabaseEngine;
   setEngine: (v: DatabaseEngine) => void;
 }) {
-  function getEngineLogo(engine: DatabaseEngine) {
-    switch (engine) {
-      case "Postgres":
-        return <PostgresLogo className="size-20" />;
-      case "MySQL":
-        return <MySQLLogo className="size-30" />;
-      case "SQLite":
-        return <SQLiteLogo className="size-20" />;
-    }
-  }
-
   return (
     <div className="space-y-3 w-fit mx-auto">
       <div className="space-y-1">

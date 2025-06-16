@@ -3,15 +3,15 @@ import {
   Check,
   Database,
   FileCode,
-  Loader2,
   MessageCircle,
   MessageCirclePlus,
+  Plus,
   SidebarClose,
   Trash,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { SetStateAction, useEffect, useMemo, useState } from "react";
+import { SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { cn, displayDate } from "@/lib/utils";
 import { useAgent } from "@/useAgent";
 import Spinner from "./ui/spinner";
@@ -31,13 +31,9 @@ import {
 import AnimatedEllipsis from "./animatedEllipsis";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { useAppData } from "@/applicationDataProvider";
-import {
-  TomeAgentModel,
-  TomeAnthropicAgentModelObject,
-  TomeOAIAgentModel,
-  TomeOAIAgentModelObject,
-} from "../../core/ai";
+import { TomeAgentModel, TomeAgentModels } from "../../core/ai";
 import { useQueryData } from "@/queryDataProvider";
+import { AIProviderLogo } from "./toolbar";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -47,11 +43,16 @@ type ChatMessage = {
 export default function ChatInterface() {
   const { settings } = useAppData();
 
-  const [model, setModel] = useState<TomeAgentModel>("gpt-4o");
+  const [model, setModel] = useState<TomeAgentModel>({
+    provider: "Open AI",
+    name: "gpt-4o",
+  });
 
   useEffect(() => {
     setModel(
-      settings?.aiFeatures.provider === "Open AI" ? "gpt-4o" : "claude-sonnet-4"
+      settings?.aiFeatures.providers.openai.enabled
+        ? { provider: "Open AI", name: "gpt-4o" }
+        : { provider: "Anthropic", name: "claude-sonnet-4" }
     );
   }, [settings]);
 
@@ -119,6 +120,7 @@ export default function ChatInterface() {
       />
       {selectedConversation && messages.length > 0 && (
         <ChatInputDisplay
+          showQueryControls={false}
           messages={msgs}
           thinking={thinking}
           input={input}
@@ -172,6 +174,7 @@ export function ChatInputDisplay({
   thinking,
   messages,
   sendMessage,
+  showQueryControls = true,
 }: {
   messages: ConversationMessage[];
   thinking: boolean;
@@ -180,10 +183,25 @@ export function ChatInputDisplay({
   input: string;
   setInput: React.Dispatch<SetStateAction<string>>;
   sendMessage: (val: ChatMessage) => Promise<void>;
+  showQueryControls: boolean;
 }) {
   const { currentConnection, currentQuery } = useQueryData();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [thinking, messages]);
+
   return (
-    <div className="flex flex-col flex-1 h-full overflow-auto mx-auto w-full max-w-5xl">
+    <div
+      ref={scrollContainerRef}
+      className="flex flex-col flex-1 h-full overflow-auto mx-auto w-full max-w-5xl"
+    >
       <div className="flex flex-col flex-1 p-4 pb-6 gap-2">
         {messages.map((i) => (
           <div
@@ -196,25 +214,18 @@ export function ChatInputDisplay({
         {thinking && <AnimatedEllipsis size="lg" />}
       </div>
       <div className=" flex flex-col gap-2 sticky justify-center items-center w-full bottom-0 left-0 px-4">
-        <div className="max-w-2xl w-full space-y-2 h-fit py-4">
+        <div className="max-w-2xl w-full h-fit py-4">
           <div className="w-full flex gap-1.5">
-            {currentQuery && (
-              <div className="w-fit text-nowrap border px-2 p-1 rounded-sm text-xs flex gap-1.5 items-center bg-zinc-900">
-                <FileCode className="size-3" />
-                {currentQuery?.title}
+            {showQueryControls && (
+              <div className="flex gap-1.5 p-2 pb-4 relative top-2 z-30 bg-zinc-800/40 backdrop-blur-lg rounded-t-md">
+                {currentQuery && <QuerySwitcher />}
+                {currentConnection && <DatabaseSwitcher />}
               </div>
             )}
-            {currentConnection && (
-              <div className="border px-2 p-1 rounded-sm text-xs flex gap-1.5 items-center bg-zinc-900">
-                <Database className="size-3" />
-                {currentConnection?.name}
-              </div>
-            )}
-
-            {thinking && <Thinking />}
           </div>
 
           <ChatInput
+            thinking={thinking}
             model={model}
             onModelChange={setModel}
             input={input}
@@ -227,10 +238,99 @@ export function ChatInputDisplay({
   );
 }
 
+export function DatabaseSwitcher() {
+  const { connections, currentConnection, setCurrentConnection } =
+    useQueryData();
+
+  return (
+    <Tooltip delayDuration={700}>
+      <Select
+        value={currentConnection?.id?.toString()}
+        onValueChange={(value) => {
+          const selectedConnection = connections.find(
+            (c) => c.id.toString() === value
+          );
+          if (selectedConnection) {
+            setCurrentConnection(selectedConnection);
+          }
+        }}
+      >
+        <TooltipTrigger>
+          <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900">
+            <Database className="size-3" />
+            {currentConnection?.name}
+          </SelectTrigger>
+        </TooltipTrigger>
+
+        <SelectContent className="dark">
+          {connections.map((connection) => (
+            <SelectItem key={connection.id} value={connection.id.toString()}>
+              {connection.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <TooltipContent>Switch database</TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function QuerySwitcher() {
+  const {
+    queries,
+    currentQuery,
+    setCurrentQuery,
+    currentConnection,
+    createQuery,
+  } = useQueryData();
+  if (!currentQuery) return null;
+  return (
+    <Tooltip delayDuration={700}>
+      <Select
+        value={currentQuery?.id?.toString()}
+        onValueChange={(value) => {
+          if (value === "new") {
+            if (!currentConnection) return;
+            createQuery({
+              connection: currentConnection?.id,
+              createdAt: new Date(),
+              query: "",
+              title: "untitled",
+            });
+          }
+          const selectedQuery = queries.find((q) => q.id.toString() === value);
+          if (selectedQuery) {
+            setCurrentQuery(selectedQuery);
+          }
+        }}
+      >
+        <TooltipTrigger>
+          <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900">
+            <FileCode className="size-3" />
+            {currentQuery?.title}
+          </SelectTrigger>
+        </TooltipTrigger>
+
+        <SelectContent className="dark">
+          {queries.map((query) => (
+            <SelectItem key={query.id} value={query.id.toString()}>
+              {query.title}
+            </SelectItem>
+          ))}
+          <SelectItem value="new">
+            <Plus /> New query
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      <TooltipContent>Switch query</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function Thinking({ className }: { className?: string }) {
   return (
-    <div className={cn("flex gap-1.5 items-center text-sm", className)}>
-      <Spinner /> Thinking...
+    <div className={cn("flex gap-1.5 items-center text-xs", className)}>
+      <Spinner className="size-3" /> Thinking...
     </div>
   );
 }
@@ -389,12 +489,14 @@ function ChatInput({
   onSubmit,
   model,
   onModelChange,
+  thinking,
 }: {
   model: TomeAgentModel;
   onModelChange: React.Dispatch<SetStateAction<TomeAgentModel>>;
   input: string;
   setInput: React.Dispatch<SetStateAction<string>>;
   onSubmit: () => void;
+  thinking?: boolean;
 }) {
   const handleSubmit = () => {
     if (input.trim()) {
@@ -404,36 +506,40 @@ function ChatInput({
   };
 
   return (
-    <div className="bg-zinc-900 rounded-md border p-2 flex items-end gap-2 w-full max-w-2xl">
-      <div className="w-full">
-        <ModelPicker model={model} onModelChange={onModelChange} />
-        <Textarea
-          placeholder="Enter a message..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          className="font-medium border-none bg-zinc-900 dark:bg-input/0"
-          onKeyDown={(e) => {
-            // Handle Cmd+Enter only within the textarea
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              handleSubmit();
-            }
-          }}
-        />
+    <div className="bg-zinc-900 rounded-md border p-2 flex items-end gap-2 w-full max-w-2xl relative z-50">
+      <div className="w-full flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <ModelPicker model={model} onModelChange={onModelChange} />
+          {thinking && <Thinking />}
+        </div>
+        <div className="flex items-end gap-2">
+          <Textarea
+            placeholder="Enter a message..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="font-medium border-none bg-zinc-900 dark:bg-input/0 h-20"
+            onKeyDown={(e) => {
+              // Handle Cmd+Enter only within the textarea
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+          />
+          <Tooltip delayDuration={1000}>
+            <TooltipTrigger>
+              <Button
+                onClick={handleSubmit}
+                variant="secondary"
+                className="rounded-full has-[>svg]:p-2 h-fit"
+              >
+                <ArrowUp className="stroke-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>⌘ ↵ </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
-
-      <Tooltip delayDuration={1000}>
-        <TooltipTrigger>
-          <Button
-            onClick={handleSubmit}
-            variant="secondary"
-            className="rounded-full has-[>svg]:p-2 h-fit"
-          >
-            <ArrowUp className="stroke-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>⌘ ↵ </TooltipContent>
-      </Tooltip>
     </div>
   );
 }
@@ -447,25 +553,122 @@ function ModelPicker({
 }) {
   const { settings } = useAppData();
 
+  // Get available models based on enabled providers
+  const getAvailableModels = () => {
+    if (!settings) return [];
+
+    const { openai, anthropic } = settings.aiFeatures.providers;
+
+    // If both providers are enabled, show all models
+    if (openai.enabled && anthropic.enabled) {
+      return TomeAgentModels;
+    }
+
+    // If only OpenAI is enabled, show OpenAI models
+    if (openai.enabled && !anthropic.enabled) {
+      return TomeAgentModels.filter((model) => model.provider === "Open AI");
+    }
+
+    // If only Anthropic is enabled, show Anthropic models
+    if (!openai.enabled && anthropic.enabled) {
+      return TomeAgentModels.filter((model) => model.provider === "Anthropic");
+    }
+
+    // If neither provider is enabled, return empty array
+    return [];
+  };
+
+  const availableModels = getAvailableModels();
+
+  // Check if the current model is still available
+  const isCurrentModelAvailable = availableModels.some(
+    (availableModel) => availableModel.name === model.name
+  );
+
+  // Group models by provider for better organization when both providers are enabled
+  const groupedModels = useMemo(() => {
+    if (availableModels.length === 0) return {};
+
+    return availableModels.reduce((groups, model) => {
+      const provider = model.provider;
+      if (!groups[provider]) {
+        groups[provider] = [];
+      }
+      groups[provider].push(model);
+      return groups;
+    }, {} as Record<string, TomeAgentModel[]>);
+  }, [availableModels]);
+
+  // If current model is not available, auto-select the first available model
+  useEffect(() => {
+    if (!isCurrentModelAvailable && availableModels.length > 0) {
+      onModelChange(availableModels[0]);
+    }
+  }, [isCurrentModelAvailable, availableModels, onModelChange]);
+
+  // Early returns after all hooks have been called
   if (!settings) return null;
 
-  const models =
-    settings.aiFeatures.provider === "Open AI"
-      ? TomeOAIAgentModelObject.options
-      : TomeAnthropicAgentModelObject.options;
+  // If no models are available, show a disabled state
+  if (availableModels.length === 0) {
+    return (
+      <Select disabled>
+        <SelectTrigger className="border !bg-zinc-950/40 !p-0 !h-fit !p-1 !px-2 text-xs opacity-50">
+          No models available
+        </SelectTrigger>
+      </Select>
+    );
+  }
+
+  const shouldGroupByProvider = Object.keys(groupedModels).length > 1;
 
   return (
     <Select
-      value={model}
-      onValueChange={(val: TomeOAIAgentModel) => onModelChange(val)}
+      value={model.name}
+      onValueChange={(val: string) => {
+        const selectedModel = TomeAgentModels.find((i) => i.name === val);
+        if (selectedModel) {
+          onModelChange(selectedModel);
+        }
+      }}
     >
-      <SelectTrigger className="border-none">{model}</SelectTrigger>
+      <SelectTrigger className="border !bg-zinc-950/40 !p-0 !h-fit !p-1 !px-2 text-xs">
+        <AIProviderLogo className="size-3.5" provider={model.provider} />
+        {model.name}
+      </SelectTrigger>
       <SelectContent className="dark">
-        {models.map((i) => (
-          <SelectItem key={i} value={i}>
-            {i}
-          </SelectItem>
-        ))}
+        {shouldGroupByProvider
+          ? // Group models by provider when both are available
+            Object.entries(groupedModels).map(([provider, models]) => (
+              <div key={provider}>
+                <div className="px-2 py-1.5 text-xs font-medium text-zinc-400 bg-zinc-800/50">
+                  {provider}
+                </div>
+                {models.map((model) => (
+                  <SelectItem key={model.name} value={model.name}>
+                    <div className="flex items-center gap-2">
+                      <AIProviderLogo
+                        className="size-3"
+                        provider={model.provider}
+                      />
+                      {model.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </div>
+            ))
+          : // Show flat list when only one provider is enabled
+            availableModels.map((model) => (
+              <SelectItem key={model.name} value={model.name}>
+                <div className="flex items-center gap-2">
+                  <AIProviderLogo
+                    className="size-3"
+                    provider={model.provider}
+                  />
+                  {model.name}
+                </div>
+              </SelectItem>
+            ))}
       </SelectContent>
     </Select>
   );
@@ -503,6 +706,30 @@ function parseUIAction(response: string) {
   };
 }
 
+function toolDisplay(message: Omit<ConversationMessage, "id">) {
+  if (message.role !== "tool-call") return;
+  if (message.content === "getSchema") {
+    if (message.toolCallStatus === "pending") {
+      return "Getting schema...";
+    }
+    return "Retrieved schema";
+  }
+
+  if (message.content === "updateQuery") {
+    if (message.toolCallStatus === "pending") {
+      return "Updating query...";
+    }
+    return "Updated query";
+  }
+
+  if (message.content === "runQuery") {
+    if (message.toolCallStatus === "pending") {
+      return "Running query...";
+    }
+    return "Ran query";
+  }
+}
+
 function ChatMessage({
   message,
   sendMessage,
@@ -522,12 +749,12 @@ function ChatMessage({
       <div className="border p-2 rounded-sm bg-zinc-900/75">
         <div className="flex gap-1.5 items-center text-xs text-zinc-400">
           {message.toolCallStatus === "pending" && (
-            <Loader2 className="animate-spin size-3.5 text-zinc-400" />
+            <Spinner className="size-3.5" />
           )}
           {message.toolCallStatus === "complete" && (
             <Check className="size-3.5 text-green-500" />
           )}
-          Called {message.content}
+          {toolDisplay(message)}
         </div>
       </div>
     );
@@ -537,12 +764,12 @@ function ChatMessage({
     <div
       className={cn(
         "overflow-auto max-w-xl",
-        fromUser ? "items-end" : "items-start"
+        fromUser ? "items-end py-4" : "items-start"
       )}
     >
       <span
         className={cn(
-          "py-2 w-full flex text-xs text-zinc-400 capitalize",
+          "pb-2 w-full flex text-xs text-zinc-400 capitalize",
           fromUser && "justify-end "
         )}
       >

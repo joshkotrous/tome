@@ -20,10 +20,9 @@ export const TomeOAIAgentModelObject = z.enum([
   "gpt-4.5",
   "gpt-4.1",
   "o3",
+  "o3-mini",
   "o4",
 ]);
-
-export type TomeOAIAgentModel = z.infer<typeof TomeOAIAgentModelObject>;
 
 export const TomeAnthropicAgentModelObject = z.enum([
   "claude-opus-4",
@@ -32,11 +31,73 @@ export const TomeAnthropicAgentModelObject = z.enum([
   "claude-sonnet-3.5",
 ]);
 
+const ModelObject = z.object({
+  provider: z.enum(["Open AI", "Anthropic"]),
+  name: z.union([TomeOAIAgentModelObject, TomeAnthropicAgentModelObject]),
+});
+
+export const TomeAgentModels: z.infer<typeof ModelObject>[] = [
+  // Anthropic Models
+  {
+    name: "claude-opus-4",
+    provider: "Anthropic",
+  },
+  {
+    name: "claude-sonnet-4",
+    provider: "Anthropic",
+  },
+  {
+    name: "claude-sonnet-3.7",
+    provider: "Anthropic",
+  },
+  {
+    name: "claude-sonnet-3.5",
+    provider: "Anthropic",
+  },
+
+  // OpenAI Models
+  {
+    name: "gpt-4o",
+    provider: "Open AI",
+  },
+  {
+    name: "gpt-4-turbo",
+    provider: "Open AI",
+  },
+  {
+    name: "gpt-4",
+    provider: "Open AI",
+  },
+  {
+    name: "gpt-4.5",
+    provider: "Open AI",
+  },
+  {
+    name: "gpt-4.1",
+    provider: "Open AI",
+  },
+  {
+    name: "o3",
+    provider: "Open AI",
+  },
+  {
+    name: "o3-mini",
+    provider: "Open AI",
+  },
+  {
+    name: "o4",
+    provider: "Open AI",
+  },
+];
+
+export type TomeOAIAgentModel = z.infer<typeof TomeOAIAgentModelObject>;
 export type TomeAnthropicAgentModel = z.infer<
   typeof TomeAnthropicAgentModelObject
 >;
 
-export type TomeAgentModel = TomeAnthropicAgentModel | TomeOAIAgentModel;
+export type TomeAgentModelOption = TomeOAIAgentModel | TomeAnthropicAgentModel;
+
+export type TomeAgentModel = z.infer<typeof ModelObject>;
 
 export type ToolMap = Record<string, Tool<any, any>>;
 
@@ -47,7 +108,7 @@ export interface StreamResponseOptions {
   tools?: ToolMap;
   apiKey: string;
   provider: AIProvider;
-  model: TomeAgentModel;
+  model: TomeAgentModelOption;
   messages?: Omit<Message, "id">[];
   maxSteps?: number;
   onChunk?: StreamTextOnChunkCallback<ToolMap>;

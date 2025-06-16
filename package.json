@@ -89,7 +89,6 @@
     "prebuild": "npm-run-all clean build:renderer build:main",
     "preview": "vite preview",
     "postinstall": "electron-builder install-app-deps"
-
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",
@@ -110,6 +109,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "diff": "^8.0.2",
     "drizzle-kit": "^0.31.1",
     "drizzle-orm": "^0.44.1",
     "electron-log": "^5.4.0",

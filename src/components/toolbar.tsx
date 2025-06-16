@@ -17,11 +17,10 @@ import {
   DialogTrigger,
 } from "./ui/dialog";
 import { Switch } from "./ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { Input } from "./ui/input";
 import { cn } from "@/lib/utils";
 import React, { SetStateAction, useEffect, useState } from "react";
-import { Database, Query, Settings as SettingsType } from "@/types";
+import { AIProvider, Database, Query, Settings as SettingsType } from "@/types";
 import {
   CommandDialog,
   CommandEmpty,
@@ -32,9 +31,10 @@ import {
   CommandSeparator,
 } from "./ui/command";
 import { useAppData } from "@/applicationDataProvider";
-import { useDB } from "@/databaseConnectionProvider";
 import { useQueryData } from "@/queryDataProvider";
 import TomeLogo from "./logos/tome";
+import OpenAILogo from "./logos/openai";
+import AnthropicLogo from "./logos/anthropic";
 export default function Toolbar() {
   const { agentModeEnabled } = useAppData();
   return (
@@ -44,9 +44,7 @@ export default function Toolbar() {
         <AddDatabaseButton />
         {!agentModeEnabled && <NewQueryButton />}
       </div>
-      {/* <div className="text-center text-xs text-zinc-400 font-mono">
-        tome 0.0.0
-      </div> */}
+
       <div className="flex justify-center">
         <TomeLogo className="size-14" />
       </div>
@@ -68,7 +66,7 @@ export function NewQueryButton({
 }: {
   size?: "default" | "xs" | "sm" | "lg" | "icon" | null | undefined;
 }) {
-  const { connected } = useDB();
+  const { connected } = useQueryData();
   const { createQuery } = useQueryData();
 
   const [selectConnectionOpen, setSelectConnectionOpen] = useState(false);
@@ -122,7 +120,7 @@ function SelectConnectionDialog({
   children?: React.ReactNode;
 }) {
   const { databases } = useAppData();
-  const { connected } = useDB();
+  const { connected } = useQueryData();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -157,9 +155,9 @@ function ConnectionList({
   setSelected?: React.Dispatch<SetStateAction<Database | null>>;
   onOpenChange: React.Dispatch<SetStateAction<boolean>>;
 }) {
-  const { connect } = useDB();
+  const { connect } = useQueryData();
 
-  const { createQuery, setCurrrentQuery } = useQueryData();
+  const { createQuery, setCurrentQuery } = useQueryData();
 
   return (
     <div className="border rounded-md overflow-hidden">
@@ -182,7 +180,7 @@ function ConnectionList({
             };
 
             const _query = await createQuery(newQuery);
-            setCurrrentQuery(_query);
+            setCurrentQuery(_query);
           }}
         >
           {i.name}
@@ -258,13 +256,7 @@ export function AIFeaturesSettingsPage({
 }) {
   const { refreshSettings } = useAppData();
   const [updating, setUpdating] = useState(false);
-  const [settings, setSettings] = useState<SettingsType>({
-    setupComplete: false,
-    aiFeatures: {
-      provider: "Open AI",
-      enabled: false,
-    },
-  });
+  const [settings, setSettings] = useState<SettingsType | null>(null);
   const [initialSettings, setInitialSettings] = useState<SettingsType | null>(
     null
   );
@@ -291,76 +283,163 @@ export function AIFeaturesSettingsPage({
     }
   }
 
+  // Helper function to check if settings have changed
+  const hasChanges = () => {
+    if (!initialSettings || !settings) return false;
+    return JSON.stringify(initialSettings) !== JSON.stringify(settings);
+  };
+
+  if (!settings) {
+    return (
+      <div className="pt-1 space-y-4 size-full flex items-center justify-center">
+        <Loader2 className="size-6 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="pt-1 space-y-4 size-full">
       <h2 className="font-semibold text-xl">AI Features</h2>
       <div className="space-y-3">
-        <div className="flex gap-4 2items-center text-sm text-zinc-400 items-center">
-          Enabled{" "}
+        <div className="flex gap-4 items-center text-sm text-zinc-400">
+          Enabled
           <Switch
-            checked={settings?.aiFeatures.enabled}
-            onCheckedChange={(e) =>
+            checked={settings.aiFeatures.enabled}
+            onCheckedChange={(enabled) =>
               setSettings((prev) => ({
-                ...prev,
+                ...prev!,
                 aiFeatures: {
-                  ...prev.aiFeatures,
-                  enabled: e,
+                  ...prev!.aiFeatures,
+                  enabled,
                 },
               }))
             }
           />
         </div>
-        <div className="flex gap-2  text-sm text-zinc-400 flex-col">
-          Provider{" "}
-          <Select
-            disabled={!settings.aiFeatures.enabled}
-            onValueChange={(val: "Open AI" | "Anthropic") =>
-              setSettings((prev) => ({
-                ...prev,
-                aiFeatures: { enabled: prev.aiFeatures.enabled, provider: val },
-              }))
-            }
-          >
-            <SelectTrigger>
-              {settings.aiFeatures.provider ?? "Open AI"}
-            </SelectTrigger>
-            <SelectContent className="dark">
-              <SelectItem value="Open AI">Open AI</SelectItem>
-              <SelectItem value="Anthropic">Anthropic</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex gap-2 2items-center text-sm text-zinc-400  flex-col">
-          API Key{" "}
-          <Input
-            disabled={!settings.aiFeatures.enabled}
-            value={settings.aiFeatures.apiKey}
-            onChange={(e) =>
-              setSettings((prev) => ({
-                ...prev,
-                aiFeatures: {
-                  enabled: prev.aiFeatures.enabled,
-                  provider: prev.aiFeatures.provider,
-                  apiKey: e.target.value,
-                },
-              }))
-            }
-            type="password"
-          />
-        </div>
+
+        {settings.aiFeatures.enabled && (
+          <>
+            <ConfigureProvider
+              provider="Open AI"
+              settings={settings}
+              onSettingsChange={setSettings}
+            />
+            <ConfigureProvider
+              provider="Anthropic"
+              settings={settings}
+              onSettingsChange={setSettings}
+            />
+          </>
+        )}
+
         <Button
-          disabled={
-            updating || (initialSettings ? initialSettings === settings : true)
-          }
+          disabled={updating || !hasChanges()}
           onClick={async () => await saveSettings(settings)}
           variant="secondary"
           className="w-full"
         >
-          Save {updating && <Loader2 className="size-3 animate-spin" />}
+          {updating ? (
+            <>
+              Saving... <Loader2 className="size-3 animate-spin ml-2" />
+            </>
+          ) : (
+            "Save Changes"
+          )}
         </Button>
       </div>
     </div>
   );
+}
+
+function ConfigureProvider({
+  provider,
+  settings,
+  onSettingsChange,
+}: {
+  provider: AIProvider;
+  settings: SettingsType;
+  onSettingsChange: (settings: SettingsType) => void;
+}) {
+  const providerKey = provider === "Open AI" ? "openai" : "anthropic";
+  const providerSettings = settings.aiFeatures.providers[providerKey];
+
+  const handleToggle = (enabled: boolean) => {
+    onSettingsChange({
+      ...settings,
+      aiFeatures: {
+        ...settings.aiFeatures,
+        providers: {
+          ...settings.aiFeatures.providers,
+          [providerKey]: {
+            ...providerSettings,
+            enabled,
+          },
+        },
+      },
+    });
+  };
+
+  const handleApiKeyChange = (apiKey: string) => {
+    onSettingsChange({
+      ...settings,
+      aiFeatures: {
+        ...settings.aiFeatures,
+        providers: {
+          ...settings.aiFeatures.providers,
+          [providerKey]: {
+            ...providerSettings,
+            apiKey,
+          },
+        },
+      },
+    });
+  };
+
+  return (
+    <div className="bg-zinc-900 p-4 px-4 space-y-2 rounded-md transition-all">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <AIProviderLogo
+            className="size-5 text-zinc-400"
+            provider={provider}
+          />
+          {provider}
+        </div>
+        <Switch
+          checked={providerSettings.enabled}
+          onCheckedChange={handleToggle}
+        />
+      </div>
+      {providerSettings.enabled && (
+        <div>
+          <p className="text-zinc-400 text-xs ml-1 py-2">API Key</p>
+          <Input
+            type="password"
+            placeholder="Enter your API key..."
+            value={providerSettings.apiKey}
+            onChange={(e) => handleApiKeyChange(e.target.value)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function AIProviderLogo({
+  provider,
+  className,
+}: {
+  provider: AIProvider;
+  className?: string;
+}) {
+  switch (provider) {
+    case "Open AI":
+      return <OpenAILogo className={className} />;
+    case "Anthropic":
+      return <AnthropicLogo className={className} />;
+    default:
+      return null;
+  }
 }
 
 function NavCmdButton() {
@@ -400,7 +479,7 @@ function NavCmd(props: {
   onOpenChange?: React.Dispatch<SetStateAction<boolean>>;
 }) {
   const { databases } = useAppData();
-  const { connect } = useDB();
+  const { connect } = useQueryData();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addDatabaseOpen, setAddDatabaseOpen] = useState(false);
   return (

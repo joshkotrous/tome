@@ -23,8 +23,10 @@ export const SettingsObject = z.object({
   setupComplete: z.boolean(),
   aiFeatures: z.object({
     enabled: z.boolean(),
-    provider: z.enum(["Open AI", "Anthropic"]).optional(),
-    apiKey: z.string().optional(),
+    providers: z.object({
+      anthropic: z.object({ enabled: z.boolean(), apiKey: z.string() }),
+      openai: z.object({ enabled: z.boolean(), apiKey: z.string() }),
+    }),
   }),
 });
 
@@ -54,3 +56,34 @@ export type Query = {
   createdAt: Date;
   title: string;
 };
+
+export interface ProxyResponse {
+  ok: boolean;
+  status: number;
+  statusText?: string;
+  headers?: Record<string, string>;
+  data?: any;
+  error?: string;
+}
+
+export interface ProxyStreamResponse {
+  ok: boolean;
+  status: number;
+  statusText?: string;
+  headers?: Record<string, string>;
+  streamId?: string;
+  error?: string;
+}
+
+export interface StreamData {
+  chunk?: string;
+  done: boolean;
+  error?: string;
+}
+
+// Request options interface
+export interface ProxyRequestOptions {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+}

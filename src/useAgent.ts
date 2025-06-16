@@ -1,7 +1,6 @@
 // useAgent.ts --------------------------------------------------------------
 import { useRef, useState, useCallback, Dispatch, SetStateAction } from "react";
 import { tool } from "ai";
-import { useDB } from "./databaseConnectionProvider";
 import { streamResponse, TomeAgentModel, ToolMap } from "../core/ai";
 import { z } from "zod";
 import { useAppData } from "./applicationDataProvider";
@@ -14,7 +13,7 @@ interface UseAgentOptions {
 }
 
 export function useAgent(options: UseAgentOptions = {}) {
-  const { connect, connected } = useDB();
+  const { connect, connected } = useQueryData();
   const { runQuery } = useQueryData();
   const { settings, databases } = useAppData();
 
@@ -169,7 +168,7 @@ export function useAgent(options: UseAgentOptions = {}) {
       `;
 
       const streamResult = streamResponse({
-        model,
+        model: model.name,
         tools,
         messages: updatedMessages
           .filter((i) => i.role !== "tool-call")

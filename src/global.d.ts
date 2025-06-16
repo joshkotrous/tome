@@ -3,8 +3,11 @@ import {
   Conversation,
   ConversationMessage,
   Database,
+  ProxyRequestOptions,
+  ProxyStreamResponse,
   Query,
   Settings,
+  StreamData,
 } from "./types";
 
 export {};
@@ -64,6 +67,17 @@ interface QueriesApi {
   createQuery: (values: Omit<Query, "id">) => Promise<Query>;
 }
 
+interface ProxyApi {
+  fetchStream: (
+    url: string,
+    options?: ProxyRequestOptions
+  ) => Promise<ProxyStreamResponse>;
+  onStreamData: (
+    streamId: string,
+    callback: (data: StreamData) => void
+  ) => () => void;
+}
+
 declare global {
   interface Window {
     db: DbApi;
@@ -71,5 +85,6 @@ declare global {
     messages: MessagesApi;
     conversations: ConversationsApi;
     queries: QueriesApi;
+    proxy: ProxyApi;
   }
 }

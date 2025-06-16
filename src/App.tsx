@@ -5,7 +5,6 @@ import QueryInterface from "./components/editor";
 import Sidebar from "./components/sidebar";
 import Toolbar, { AIFeaturesSettingsPage } from "./components/toolbar";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { DBConnectionProvider } from "./databaseConnectionProvider";
 import { QueryDataProvider } from "./queryDataProvider";
 import {
   Dialog,
@@ -21,23 +20,21 @@ import TomeLogo from "./components/logos/tome";
 function App() {
   return (
     <AppDataProvider>
-      <DBConnectionProvider>
-        <QueryDataProvider>
-          <TooltipProvider>
-            <SetupWindow />
-            <div className="w-full h-full bg-zinc-950 flex flex-col dark overflow-hidden">
-              <Toolbar />
-              <div className=" flex-1 flex min-h-0">
-                <Sidebar />
-                <div className="flex-1 flex flex-col min-w-0">
-                  <QueryInterface />
-                  <BottomBar />
-                </div>
+      <QueryDataProvider>
+        <TooltipProvider>
+          <SetupWindow />
+          <div className="w-full h-full bg-zinc-950 flex flex-col dark overflow-hidden">
+            <Toolbar />
+            <div className=" flex-1 flex min-h-0">
+              <Sidebar />
+              <div className="flex-1 flex flex-col min-w-0">
+                <QueryInterface />
+                <BottomBar />
               </div>
             </div>
-          </TooltipProvider>
-        </QueryDataProvider>
-      </DBConnectionProvider>
+          </div>
+        </TooltipProvider>
+      </QueryDataProvider>
     </AppDataProvider>
   );
 }
@@ -114,8 +111,8 @@ function SetupWindow() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="dark max-w-5xl">
-        {displayStep(step)}
+      <DialogContent className="dark size-full max-w-full flex justify-center items-center outline-none">
+        <div className="space-y-2 w-full max-w-3xl">{displayStep(step)}</div>
       </DialogContent>
     </Dialog>
   );
