@@ -227,7 +227,7 @@ export function SqlEditor() {
 
   async function handleRunQuery() {
     if (currentQuery && currentConnection) {
-      await runQuery(currentConnection, currentQuery.query);
+      await runQuery(currentConnection, queryContent);
     }
   }
 
@@ -629,6 +629,7 @@ function EditorAgent({
       toolCallStreaming: true,
       provider: model.provider,
       tools,
+      maxSteps: 10,
       toolChoice: "required",
       messages: newMessages
         .filter((i) => i.role !== "tool-call")
