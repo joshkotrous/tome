@@ -7,7 +7,7 @@ export default defineConfig({
   out: "./db/migrations",
   dialect: "sqlite",
   dbCredentials: {
-    url: `file:${"/Users/josh-pensar/Library/Application Support/tome/tome.sqlite"}`,
+    url: `file:${dbPath}`,
   },
   strict: true,
 });
