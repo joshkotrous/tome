@@ -209,7 +209,7 @@ export function SqlEditor() {
 
   if (databases.length === 0) {
     return (
-      <div className="flex flex-1 justify-center items-center flex-col gap-2 text-zinc-400">
+      <div className="size-full flex flex-1 justify-center items-center flex-col gap-2 text-zinc-400">
         Create a connection to get started
         <AddDatabaseButton size="default" />
       </div>
@@ -332,6 +332,19 @@ export function SqlEditor() {
       />
     </div>
   );
+}
+
+function addLineNumbers(str: string) {
+  const lines = str.split("\n");
+  const maxLineNumber = lines.length;
+  const padding = String(maxLineNumber).length;
+
+  return lines
+    .map((line, i) => {
+      const lineNumber = String(i + 1).padStart(padding, " ");
+      return `${lineNumber} | ${line}`;
+    })
+    .join("\n");
 }
 
 function EditorAgent({
@@ -520,41 +533,44 @@ function EditorAgent({
             .describe("The end line where the update should be made (1-based)"),
         }),
         execute: async ({ querySnippet, startLine, endLine }) => {
-          // Split the current query into lines
           const queryLines = query.split("\n");
 
-          // Convert 1-based line numbers to 0-based array indices
           const startIndex = Math.max(0, startLine - 1);
           const endIndex = Math.max(0, endLine - 1);
 
-          // Validate line numbers
           if (startIndex >= queryLines.length) {
             throw new Error(
               `Start line ${startLine} is beyond the query length (${queryLines.length} lines)`
             );
           }
 
-          // Split the query snippet into lines
+          if (endIndex >= queryLines.length) {
+            throw new Error(
+              `End line ${endLine} is beyond the query length (${queryLines.length} lines)`
+            );
+          }
+
+          if (startLine > endLine) {
+            throw new Error(
+              `Start line ${startLine} cannot be greater than end line ${endLine}`
+            );
+          }
+
           const snippetLines = querySnippet.split("\n");
 
-          // Get the parts of the query that will remain unchanged
           const beforeLines = queryLines.slice(0, startIndex);
           const afterLines = queryLines.slice(endIndex + 1);
 
-          // Build the base query with unchanged parts
           const baseQuery = [
             ...beforeLines,
-            ...new Array(snippetLines.length).fill(""), // Placeholder for new lines
+            ...new Array(snippetLines.length).fill(""),
             ...afterLines,
           ].join("\n");
 
-          // Set the base structure first
           onQueryChange(baseQuery);
 
-          // Add a small delay
           await new Promise((resolve) => setTimeout(resolve, 10));
 
-          // Now sequentially replace each placeholder with the actual snippet line
           for (let i = 0; i < snippetLines.length; i++) {
             const snippetLine = snippetLines[i];
             const targetLineIndex = startIndex + i;
@@ -565,7 +581,6 @@ function EditorAgent({
               return lines.join("\n");
             });
 
-            // Small delay between each line for visual effect
             await new Promise((resolve) => setTimeout(resolve, 20));
           }
 
@@ -614,13 +629,16 @@ function EditorAgent({
       toolCallStreaming: true,
       provider: model.provider,
       tools,
+      toolChoice: "required",
       messages: newMessages
         .filter((i) => i.role !== "tool-call")
         .map((k) => ({
           ...k,
           role: k.role as "user" | "assistant",
         })),
-      system: `You are a helpful database administrator embedded in a database client. Assist the user with any help they need with their database.\nThis is the current query: <current_query>${query}</current_query>.\nThe currently connected database is ${JSON.stringify(
+      system: `You are a helpful database administrator embedded in a database client. Assist the user with any help they need with their database.\nThis is the current query: <current_query>${addLineNumbers(
+        query
+      )}</current_query>.\nThe currently connected database is ${JSON.stringify(
         currentConnection,
         null,
         2

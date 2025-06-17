@@ -1,5 +1,5 @@
 import { defineConfig } from "drizzle-kit";
-// import { dbPath } from "./electron/main";
+import { dbPath } from "./electron/main";
 import "dotenv/config";
 
 export default defineConfig({
@@ -7,7 +7,7 @@ export default defineConfig({
   out: "./db/migrations",
   dialect: "sqlite",
   dbCredentials: {
-    url: `file:${"/Users/josh-pensar/Library/Application Support/tome/tome.sqlite"}`,
+    url: `file:${dbPath}`,
   },
   strict: true,
 });

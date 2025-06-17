@@ -30,10 +30,20 @@ async function initDb() {
     : path.join(__dirname, "../db/migrations");
 
   console.log("Running migrations from ", migrationsPath);
+  try {
+    migrate(db, {
+      migrationsFolder: migrationsPath,
+    });
+  } catch (error) {
+    console.error("Error migration database, resetting", error);
+    await fs.rm(dbPath);
+    const db = drizzle(raw, { schema });
+    migrate(db, {
+      migrationsFolder: migrationsPath,
+    });
+    console.log("Successfully reset and migrated db");
+  }
 
-  migrate(db, {
-    migrationsFolder: migrationsPath,
-  });
   console.log("Database initialized successfully");
 }
 

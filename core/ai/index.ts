@@ -6,6 +6,7 @@ import {
   GenerateTextResult,
   StreamTextOnChunkCallback,
   StreamTextOnFinishCallback,
+  ToolChoice,
 } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
@@ -113,6 +114,7 @@ export interface StreamResponseOptions {
   maxSteps?: number;
   onChunk?: StreamTextOnChunkCallback<ToolMap>;
   onFinish?: StreamTextOnFinishCallback<ToolMap>;
+  toolChoice?: ToolChoice<ToolMap>;
 }
 
 export function streamResponse(
@@ -161,7 +163,8 @@ function streamOpenAI(
   maxSteps = 10,
   toolCallStreaming?: boolean,
   onChunk?: StreamTextOnChunkCallback<ToolMap>,
-  onFinish?: StreamTextOnFinishCallback<ToolMap>
+  onFinish?: StreamTextOnFinishCallback<ToolMap>,
+  toolChoice?: ToolChoice<ToolMap>
 ): StreamTextResult<ToolMap, never> {
   const openai = createOpenAI({ apiKey });
   return streamText({
@@ -174,6 +177,7 @@ function streamOpenAI(
     toolCallStreaming,
     onChunk,
     onFinish,
+    toolChoice,
   });
 }
 
@@ -187,7 +191,8 @@ function streamAnthropic(
   maxSteps = 10,
   toolCallStreaming?: boolean,
   onChunk?: StreamTextOnChunkCallback<ToolMap>,
-  onFinish?: StreamTextOnFinishCallback<ToolMap>
+  onFinish?: StreamTextOnFinishCallback<ToolMap>,
+  toolChoice?: ToolChoice<ToolMap>
 ): StreamTextResult<ToolMap, never> {
   function getAnthropicModel(model: TomeAnthropicAgentModel) {
     switch (model) {
@@ -214,6 +219,7 @@ function streamAnthropic(
     toolCallStreaming,
     onChunk,
     onFinish,
+    toolChoice,
   });
 }
 
