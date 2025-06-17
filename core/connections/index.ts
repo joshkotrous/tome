@@ -1,6 +1,6 @@
 import { db } from "../../db";
 import * as schema from "../../db/schema";
-import { Connection, Database } from "../../src/types";
+import { ConnectionConfig, Connection } from "../../src/types";
 import { eq, inArray } from "drizzle-orm";
 import { Client, Pool as PgPool, QueryResult } from "pg";
 import { ConnectionConfig as MYSQLConnection } from "mysql";
@@ -8,37 +8,40 @@ import { ConnectionConfig as PGConnection } from "pg";
 
 import * as mysql from "mysql";
 
-export async function listDatabases(): Promise<Database[]> {
-  const dbs = await db.select().from(schema.databases);
+export async function listConnections(): Promise<Connection[]> {
+  const dbs = await db.select().from(schema.connections);
   return dbs;
 }
 
-export async function getDatabase(id: number): Promise<Database> {
+export async function getConnection(id: number): Promise<Connection> {
   const database = await db
     .select()
-    .from(schema.databases)
-    .where(eq(schema.databases.id, id));
+    .from(schema.connections)
+    .where(eq(schema.connections.id, id));
   return database[0];
 }
 
-export async function createDatabase(
-  values: Omit<Database, "id" | "createdAt">
-): Promise<Database> {
+export async function createConnection(
+  values: Omit<Connection, "id" | "createdAt">
+): Promise<Connection> {
   // TODO: encrypt password
-  const database = await db.insert(schema.databases).values(values).returning();
+  const database = await db
+    .insert(schema.connections)
+    .values(values)
+    .returning();
   return database[0];
 }
 
-export async function deleteDatabases(ids: number[]): Promise<void> {
-  await db.delete(schema.databases).where(inArray(schema.databases.id, ids));
+export async function deleteConnections(ids: number[]): Promise<void> {
+  await db.delete(schema.connections).where(inArray(schema.databases.id, ids));
 }
 
-export async function updateDatabase(
+export async function updateConnection(
   id: number,
-  values: Partial<Database>
-): Promise<Database> {
+  values: Partial<Connection>
+): Promise<Connection> {
   const updated = await db
-    .update(schema.databases)
+    .update(schema.connections)
     .set(values)
     .where(eq(schema.databases.id, id))
     .returning();
@@ -46,7 +49,7 @@ export async function updateDatabase(
 }
 
 export async function testConnection(
-  db: Omit<Database, "id">
+  db: Omit<Connection, "id">
 ): Promise<{ success: boolean; error: string }> {
   switch (db.engine) {
     case "Postgres":
@@ -58,7 +61,7 @@ export async function testConnection(
 }
 
 async function testPostgresConnection(
-  connection: Connection
+  connection: ConnectionConfig
 ): Promise<{ success: boolean; error: string }> {
   const client = new Client({
     host: connection.host,
@@ -84,11 +87,11 @@ async function testPostgresConnection(
 
 type Driver = PgPool | mysql.Connection;
 
-type ConnectionEntry = { db: Database; driver: Driver };
+type ConnectionEntry = { db: Connection; driver: Driver };
 
 const connections = new Map<number, ConnectionEntry>();
 
-export async function connect(db: Database): Promise<ConnectionEntry> {
+export async function connect(db: Connection): Promise<ConnectionEntry> {
   const existing = connections.get(db.id);
   if (existing) return existing;
 
@@ -119,7 +122,7 @@ export async function connect(db: Database): Promise<ConnectionEntry> {
   return entry;
 }
 
-export async function disconnect(db: Database): Promise<void> {
+export async function disconnect(db: Connection): Promise<void> {
   const entry = connections.get(db.id);
   if (!entry) return;
 
@@ -132,7 +135,7 @@ export async function disconnect(db: Database): Promise<void> {
   connections.delete(db.id);
 }
 
-export function listActive(): Database[] {
+export function listActive(): Connection[] {
   return [...connections.values()].map((e) => e.db);
 }
 export interface JsonQueryResult {
@@ -145,7 +148,7 @@ export interface JsonQueryResult {
 }
 
 function toJsonResult(
-  engine: Database["engine"],
+  engine: Connection["engine"],
   result: any
 ): JsonQueryResult {
   switch (engine) {
@@ -182,7 +185,7 @@ function toJsonResult(
 }
 
 export async function query(
-  db: Database,
+  db: Connection,
   sql: string,
   params: any[] = []
 ): Promise<JsonQueryResult> {
@@ -221,7 +224,7 @@ export async function query(
   }
 }
 
-export async function listRemoteDatabases(db: Database): Promise<string[]> {
+export async function listRemoteDatabases(db: Connection): Promise<string[]> {
   const { driver } = await connect(db);
 
   switch (db.engine) {
@@ -271,7 +274,7 @@ export interface TableDef {
 }
 
 export async function listSchemas(
-  db: Database,
+  db: Connection,
   targetDb?: string
 ): Promise<string[]> {
   const sameDb =
@@ -312,7 +315,7 @@ export async function listSchemas(
 }
 
 export async function listSchemaTables(
-  db: Database,
+  db: Connection,
   targetSchema: string,
   targetDb?: string
 ): Promise<TableDef[]> {
@@ -473,7 +476,7 @@ export interface SchemaInfo {
 }
 
 export async function getFullSchema(
-  db: Database,
+  db: Connection,
   targetDb?: string
 ): Promise<DatabaseSchema> {
   const databaseName = targetDb || db.connection.database || "default";

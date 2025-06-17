@@ -45,7 +45,7 @@ export function useAgent(options: UseAgentOptions = {}) {
 
   async function getFullSchema(connectionName: string, connectionId: number) {
     const conn = await getConnection(connectionName, connectionId);
-    const schema = await window.db.getFullSchema(conn);
+    const schema = await window.connections.getFullSchema(conn);
     return schema;
   }
 

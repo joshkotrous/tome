@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useQueryData } from "@/queryDataProvider";
 import Spinner from "./ui/spinner";
-import { JsonQueryResult } from "core/database";
+import { JsonQueryResult } from "core/connections";
 import { Button } from "./ui/button";
 import { Check, FileOutput, X } from "lucide-react";
 

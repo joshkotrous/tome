@@ -19,7 +19,7 @@ import {
 import { Button } from "./ui/button";
 import { SetStateAction, useEffect, useRef, useState } from "react";
 import ResizableContainer from "./ui/resizableContainer";
-import { Database, DatabaseEngine } from "@/types";
+import { Connection, DatabaseEngine } from "@/types";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -47,7 +47,7 @@ import Spinner from "./ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Kbd } from "./toolbar";
 import { useAppData } from "@/applicationDataProvider";
-import { ColumnDef, TableDef } from "core/database";
+import { ColumnDef, TableDef } from "core/connections";
 import { useQueryData } from "@/queryDataProvider";
 
 export default function Sidebar() {
@@ -120,7 +120,7 @@ export default function Sidebar() {
 }
 
 function ConnectionList() {
-  const [selected, setSelected] = useState<Database | null>(null);
+  const [selected, setSelected] = useState<Connection | null>(null);
   const { databases } = useAppData();
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -160,9 +160,9 @@ function ConnectionListItem({
   selected,
   setSelected,
 }: {
-  item: Database;
-  selected: Database | null;
-  setSelected: React.Dispatch<SetStateAction<Database | null>>;
+  item: Connection;
+  selected: Connection | null;
+  setSelected: React.Dispatch<SetStateAction<Connection | null>>;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -196,7 +196,7 @@ function ConnectionListItem({
   );
 }
 
-export function DBInformation({ db }: { db: Database }) {
+export function DBInformation({ db }: { db: Connection }) {
   const { connected, loadingDb: loading } = useQueryData();
 
   function displayLogo(engine: DatabaseEngine) {
@@ -220,7 +220,7 @@ export function DBInformation({ db }: { db: Database }) {
   );
 }
 
-function DatabaseList({ connection }: { connection: Database }) {
+function DatabaseList({ connection }: { connection: Connection }) {
   const { connected } = useQueryData();
   const [databases, setDatabases] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -230,7 +230,7 @@ function DatabaseList({ connection }: { connection: Database }) {
   async function getData() {
     if (connected.some((i) => i.id === connection.id)) {
       setLoading(true);
-      const dbs = await window.db.listRemoteDatabases(connection);
+      const dbs = await window.connections.listRemoteDatabases(connection);
       setDatabases(dbs);
       setLoading(false);
     }
@@ -274,7 +274,7 @@ function DatabaseListItem({
   connection,
   database,
 }: {
-  connection: Database;
+  connection: Connection;
   database: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -310,7 +310,7 @@ function SchemaList({
   connection,
   database,
 }: {
-  connection: Database;
+  connection: Connection;
   database: string;
 }) {
   const [schemas, setSchemas] = useState<string[]>([]);
@@ -320,7 +320,7 @@ function SchemaList({
 
   async function getData() {
     setLoading(true);
-    const _schemas = await window.db.listSchemas(connection, database);
+    const _schemas = await window.connections.listSchemas(connection, database);
     setSchemas(_schemas);
     setLoading(false);
   }
@@ -368,7 +368,7 @@ function SchemaListItem({
   database,
   schema,
 }: {
-  connection: Database;
+  connection: Connection;
   database: string;
   schema: string;
 }) {
@@ -409,7 +409,7 @@ function TableList({
   database,
   connection,
 }: {
-  connection: Database;
+  connection: Connection;
   database: string;
   schema: string;
 }) {
@@ -420,7 +420,7 @@ function TableList({
 
   async function getData() {
     setLoading(true);
-    const _tables = await window.db.listSchemaTables(
+    const _tables = await window.connections.listSchemaTables(
       connection,
       schema,
       database
@@ -534,8 +534,8 @@ function ConnectionListContextMenu({
   setSelected,
 }: {
   children: React.ReactNode;
-  item?: Database;
-  setSelected?: React.Dispatch<SetStateAction<Database | null>>;
+  item?: Connection;
+  setSelected?: React.Dispatch<SetStateAction<Connection | null>>;
 }) {
   const { connect, disconnect, error, setError, connected } = useQueryData();
 
@@ -655,7 +655,7 @@ function DeleteDatabaseDialog({
   open,
   setOpen,
 }: {
-  database: Database;
+  database: Connection;
   open: boolean;
   setOpen: React.Dispatch<SetStateAction<boolean>>;
 }) {
@@ -663,7 +663,7 @@ function DeleteDatabaseDialog({
   const [loading, setLoading] = useState(false);
   async function handleDelete() {
     setLoading(true);
-    await window.db.deleteDatabases([database.id]);
+    await window.connections.deleteConnections([database.id]);
     refreshDatabases();
     setLoading(false);
     setOpen(false);
@@ -699,14 +699,14 @@ function EditConnectionForm({
 }: {
   open: boolean;
   setOpen: React.Dispatch<SetStateAction<boolean>>;
-  database: Database;
+  database: Connection;
 }) {
   const { refreshDatabases } = useAppData();
-  const [details, setDetails] = useState<Database>(database);
+  const [details, setDetails] = useState<Connection>(database);
   const [loading, setLoading] = useState(false);
-  async function handleSave(database: Database) {
+  async function handleSave(database: Connection) {
     setLoading(true);
-    await window.db.updateDatabase(database.id, details);
+    await window.connections.updateConnection(database.id, details);
     setLoading(false);
     setOpen(false);
     refreshDatabases();

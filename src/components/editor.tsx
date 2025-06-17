@@ -22,7 +22,7 @@ import ChatInterface, { ChatInputDisplay } from "./chatInterface";
 import { Switch } from "./ui/switch";
 import { AnimatePresence, motion } from "framer-motion";
 import { streamResponse, TomeAgentModel, ToolMap } from "../../core/ai";
-import { DatabaseSchema } from "core/database";
+import { DatabaseSchema } from "core/connections";
 import ResizableContainer from "./ui/resizableContainer";
 import { ConversationMessage, Query } from "@/types";
 import { z } from "zod";
@@ -115,7 +115,7 @@ export function SqlEditor() {
 
   async function getData() {
     if (currentConnection) {
-      const _schema = await window.db.getFullSchema(currentConnection);
+      const _schema = await window.connections.getFullSchema(currentConnection);
       setSchema(_schema);
     }
   }
@@ -183,7 +183,7 @@ export function SqlEditor() {
 
     if (!currentConnection) return;
 
-    const _schema = await window.db.getFullSchema(currentConnection);
+    const _schema = await window.connections.getFullSchema(currentConnection);
 
     // Command to run full query
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () =>
@@ -460,7 +460,7 @@ function EditorAgent({
 
   async function getFullSchema(connectionName: string, connectionId: number) {
     const conn = await getConnection(connectionName, connectionId);
-    const schema = await window.db.getFullSchema(conn);
+    const schema = await window.connections.getFullSchema(conn);
     return schema;
   }
 

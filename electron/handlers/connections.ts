@@ -1,25 +1,25 @@
 import {
   connect,
-  createDatabase,
-  deleteDatabases,
+  createConnection,
+  deleteConnections,
   disconnect,
-  getDatabase,
+  getConnection,
   getFullSchema,
   listActive,
-  listDatabases,
+  listConnections,
   listRemoteDatabases,
   listSchemas,
   listSchemaTables,
   query,
   testConnection,
-  updateDatabase,
-} from "../../core/database";
-import { Database as DatabaseType } from "../../src/types";
+  updateConnection,
+} from "../../core/connections";
+import { Connection as ConnectionType } from "../../src/types";
 import { ipcMain } from "electron";
 
-ipcMain.handle("db:listDatabases", async () => {
+ipcMain.handle("connections:listConnections", async () => {
   try {
-    const databases = await listDatabases();
+    const databases = await listConnections();
     return databases;
   } catch (err) {
     console.error("Failed to list databases:", err);
@@ -27,28 +27,33 @@ ipcMain.handle("db:listDatabases", async () => {
   }
 });
 
-ipcMain.handle("db:getDatabase", async (_event, id: number) => {
+ipcMain.handle("connections:getConnection", async (_event, id: number) => {
   try {
-    const database = await getDatabase(id);
+    const database = await getConnection(id);
     return database;
   } catch (err) {
     console.error("Failed to get database:", err);
     throw err;
   }
 });
-ipcMain.handle("db:deleteDatabases", async (_event, ids: number[]) => {
-  try {
-    await deleteDatabases(ids);
-  } catch (err) {
-    console.error("Failed to delete databases:", err);
-    throw err;
-  }
-});
+
 ipcMain.handle(
-  "db:updateDatabase",
-  async (_event, id: number, values: Partial<DatabaseType>) => {
+  "connections:deleteConnections",
+  async (_event, ids: number[]) => {
     try {
-      const database = await updateDatabase(id, values);
+      await deleteConnections(ids);
+    } catch (err) {
+      console.error("Failed to delete databases:", err);
+      throw err;
+    }
+  }
+);
+
+ipcMain.handle(
+  "connections:updateConnection",
+  async (_event, id: number, values: Partial<ConnectionType>) => {
+    try {
+      const database = await updateConnection(id, values);
       return database;
     } catch (err) {
       console.error("Failed to update database:", err);
@@ -58,10 +63,10 @@ ipcMain.handle(
 );
 
 ipcMain.handle(
-  "db:createDatabase",
-  async (_event, values: Omit<DatabaseType, "id">) => {
+  "connections:createConnection",
+  async (_event, values: Omit<ConnectionType, "id">) => {
     try {
-      const database = await createDatabase(values);
+      const database = await createConnection(values);
       return database;
     } catch (err) {
       console.error("Failed to create database:", err);
@@ -71,8 +76,8 @@ ipcMain.handle(
 );
 
 ipcMain.handle(
-  "db:testConnection",
-  async (_event, db: Omit<DatabaseType, "id">) => {
+  "connections:testConnection",
+  async (_event, db: Omit<ConnectionType, "id">) => {
     try {
       const success = await testConnection(db);
       return success;
@@ -83,7 +88,7 @@ ipcMain.handle(
   }
 );
 
-ipcMain.handle("db:connect", async (_event, db: DatabaseType) => {
+ipcMain.handle("connections:connect", async (_event, db: ConnectionType) => {
   try {
     await connect(db);
   } catch (err) {
@@ -92,7 +97,7 @@ ipcMain.handle("db:connect", async (_event, db: DatabaseType) => {
   }
 });
 
-ipcMain.handle("db:disconnect", async (_event, db: DatabaseType) => {
+ipcMain.handle("connections:disconnect", async (_event, db: ConnectionType) => {
   try {
     await disconnect(db);
   } catch (err) {
@@ -101,7 +106,7 @@ ipcMain.handle("db:disconnect", async (_event, db: DatabaseType) => {
   }
 });
 
-ipcMain.handle("db:listActiveConnections", async () => {
+ipcMain.handle("connections:listActiveConnections", async () => {
   try {
     const active = listActive();
     return active;
@@ -111,19 +116,22 @@ ipcMain.handle("db:listActiveConnections", async () => {
   }
 });
 
-ipcMain.handle("db:listRemoteDatabases", async (_event, db: DatabaseType) => {
-  try {
-    const remotes = await listRemoteDatabases(db);
-    return remotes;
-  } catch (error) {
-    console.error("Failed to list remote databases", error);
-    throw error;
+ipcMain.handle(
+  "connections:listRemoteDatabases",
+  async (_event, db: ConnectionType) => {
+    try {
+      const remotes = await listRemoteDatabases(db);
+      return remotes;
+    } catch (error) {
+      console.error("Failed to list remote databases", error);
+      throw error;
+    }
   }
-});
+);
 
 ipcMain.handle(
-  "db:listSchemas",
-  async (_event, db: DatabaseType, targetDb?: string) => {
+  "connections:listSchemas",
+  async (_event, db: ConnectionType, targetDb?: string) => {
     try {
       const schemas = await listSchemas(db, targetDb);
       return schemas;
@@ -134,8 +142,13 @@ ipcMain.handle(
   }
 );
 ipcMain.handle(
-  "db:listSchemaTables",
-  async (_event, db: DatabaseType, targetSchema: string, targetDb?: string) => {
+  "connections:listSchemaTables",
+  async (
+    _event,
+    db: ConnectionType,
+    targetSchema: string,
+    targetDb?: string
+  ) => {
     try {
       const tables = await listSchemaTables(db, targetSchema, targetDb);
       return tables;
@@ -147,8 +160,8 @@ ipcMain.handle(
 );
 
 ipcMain.handle(
-  "db:query",
-  async (_event, db: DatabaseType, sql: string, params?: any[]) => {
+  "connections:query",
+  async (_event, db: ConnectionType, sql: string, params?: any[]) => {
     try {
       const result = await query(db, sql, params);
       return result;
@@ -160,8 +173,8 @@ ipcMain.handle(
 );
 
 ipcMain.handle(
-  "db:getFullSchema",
-  async (_event, db: DatabaseType, targetDb?: string) => {
+  "connections:getFullSchema",
+  async (_event, db: ConnectionType, targetDb?: string) => {
     try {
       const schema = await getFullSchema(db, targetDb);
       return schema;

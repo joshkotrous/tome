@@ -6,14 +6,14 @@ export const DatabaseEngineObject = z.enum(["Postgres", "MySQL", "SQLite"]);
 
 export type DatabaseEngine = z.infer<typeof DatabaseEngineObject>;
 
-export type Connection = PGConnection | MYSQLConnection;
+export type ConnectionConfig = PGConnection | MYSQLConnection;
 
-export type Database = {
+export type Connection = {
   id: number;
   name: string;
   engine: DatabaseEngine;
   description: string | null;
-  connection: Connection;
+  connection: ConnectionConfig;
   createdAt: Date;
 };
 
@@ -55,6 +55,21 @@ export type Query = {
   query: string;
   createdAt: Date;
   title: string;
+};
+
+export type Database = {
+  id: number;
+  connection: number;
+  name: string;
+  description: string | null;
+};
+
+export type Column = {
+  id: number;
+  database: number;
+  name: string;
+  description: string | null;
+  type: string;
 };
 
 export interface ProxyResponse {

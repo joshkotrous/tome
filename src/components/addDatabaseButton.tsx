@@ -14,6 +14,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import {
   Connection,
+  ConnectionConfig,
   Database,
   DatabaseEngine,
   DatabaseEngineObject,
@@ -68,7 +69,7 @@ export function AddDatabaseDialog({
 export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
   const { refreshDatabases } = useAppData();
   const [step, setStep] = useState<AddDatabaseStep>("engine");
-  const [database, setDatabase] = useState<Omit<Database, "id">>({
+  const [database, setDatabase] = useState<Omit<Connection, "id">>({
     connection: {
       database: "",
       host: "",
@@ -121,9 +122,9 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
     }
   }
 
-  async function saveDatabase(database: Omit<Database, "id">) {
+  async function saveDatabase(database: Omit<Connection, "id">) {
     setLoading(true);
-    await window.db.createDatabase(database);
+    await window.connections.createConnection(database);
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
     setLoading(false);
     if (onComplete) {
@@ -195,7 +196,7 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
 export function TestConnectionButton({
   database,
 }: {
-  database: Omit<Database, "id">;
+  database: Omit<Connection, "id">;
 }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{
@@ -205,10 +206,10 @@ export function TestConnectionButton({
 
   const [open, setOpen] = useState(false);
 
-  async function testConnection(db: Omit<Database, "id">) {
+  async function testConnection(db: Omit<Connection, "id">) {
     setLoading(true);
     try {
-      const success = await window.db.testConnection(db);
+      const success = await window.connections.testConnection(db);
       await new Promise<void>((resolve) => setTimeout(resolve, 200));
 
       setStatus({
@@ -340,10 +341,10 @@ export function ConnectionDetailsForm({
   values,
   onChange,
 }: {
-  values: Omit<Database, "id"> | Database;
+  values: Omit<Connection, "id"> | Connection;
   onChange:
-    | React.Dispatch<SetStateAction<Omit<Database, "id">>>
-    | React.Dispatch<SetStateAction<Database>>;
+    | React.Dispatch<SetStateAction<Omit<Connection, "id">>>
+    | React.Dispatch<SetStateAction<Connection>>;
 }) {
   switch (values.engine) {
     case "Postgres":
@@ -359,10 +360,10 @@ export function GeneralConnectionForm({
   values,
   onChange,
 }: {
-  values: Omit<Database, "id"> | Database;
+  values: Omit<Connection, "id"> | Connection;
   onChange:
-    | React.Dispatch<SetStateAction<Omit<Database, "id">>>
-    | React.Dispatch<SetStateAction<Database>>;
+    | React.Dispatch<SetStateAction<Omit<Connection, "id">>>
+    | React.Dispatch<SetStateAction<Connection>>;
 }) {
   const handleTopLevelChange = (
     field: keyof Omit<Database, "connection" | "engine">,
@@ -375,7 +376,7 @@ export function GeneralConnectionForm({
   };
 
   const handleConnectionChange = (
-    field: keyof Connection,
+    field: keyof ConnectionConfig,
     value: string | number | boolean
   ) => {
     onChange((prev: any) => ({

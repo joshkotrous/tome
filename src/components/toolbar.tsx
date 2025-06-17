@@ -20,7 +20,12 @@ import { Switch } from "./ui/switch";
 import { Input } from "./ui/input";
 import { cn } from "@/lib/utils";
 import React, { SetStateAction, useEffect, useState } from "react";
-import { AIProvider, Database, Query, Settings as SettingsType } from "@/types";
+import {
+  AIProvider,
+  Connection,
+  Query,
+  Settings as SettingsType,
+} from "@/types";
 import {
   CommandDialog,
   CommandEmpty,
@@ -114,7 +119,7 @@ function SelectConnectionDialog({
   onlyActiveConnections,
 }: {
   onlyActiveConnections?: boolean;
-  setSelected?: React.Dispatch<SetStateAction<Database | null>>;
+  setSelected?: React.Dispatch<SetStateAction<Connection | null>>;
   open: boolean;
   onOpenChange: React.Dispatch<SetStateAction<boolean>>;
   children?: React.ReactNode;
@@ -151,8 +156,8 @@ function ConnectionList({
   setSelected,
   onOpenChange,
 }: {
-  connections: Database[];
-  setSelected?: React.Dispatch<SetStateAction<Database | null>>;
+  connections: Connection[];
+  setSelected?: React.Dispatch<SetStateAction<Connection | null>>;
   onOpenChange: React.Dispatch<SetStateAction<boolean>>;
 }) {
   const { connect } = useQueryData();
