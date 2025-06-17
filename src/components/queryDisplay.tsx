@@ -8,7 +8,6 @@ import { Check, FileOutput, X } from "lucide-react";
 
 export default function QueryDisplay() {
   const { loadingQuery, queryResult, error } = useQueryData();
-
   return (
     <div className="flex flex-col flex-1 size-full">
       <QueryToolbar />
@@ -38,7 +37,6 @@ function QueryToolbar() {
 
 export function QueryStatus() {
   const { loadingQuery, queryResult, error } = useQueryData();
-
   return (
     <div className="flex gap-1.5">
       {loadingQuery && <Spinner className="" />}
@@ -88,17 +86,21 @@ export function QueryResultTable({
   return (
     <div
       ref={tableContainerRef}
-      className={`h-full text-nowrap overflow-auto text-sm text-zinc-200 font-mono ${className}`}
+      className={`h-full text-nowrap overflow-auto text-sm text-zinc-200 font-mono select-none ${className}`}
     >
       <div className="min-w-full">
         {/* Fixed Header */}
-        <div className="sticky top-0 bg-zinc-800 z-10 border-b border-zinc-700">
-          <div className="flex">
+        <div className="sticky w-fit top-0 bg-zinc-950 z-10 border-b border-zinc-700 ">
+          <div className="flex w-fit text-sm">
+            {/* Row number header */}
+            <div className="w-9 px-3 py-1 text-left font-semibold whitespace-nowrap flex-shrink-0 border-r border-zinc-700">
+              #
+            </div>
+            {/* Data column headers */}
             {result.columns.map((c) => (
               <div
                 key={c}
-                className="px-3 py-1 text-left font-semibold whitespace-nowrap flex-shrink-0 text-sm"
-                style={{ minWidth: "128px" }} // Consistent column width
+                className="w-32 px-3 py-1 text-left flex items-center font-semibold whitespace-nowrap flex-shrink-0 text-xs border-zinc-700 border-r"
               >
                 {c}
               </div>
@@ -132,12 +134,17 @@ export function QueryResultTable({
                   virtualRow.index % 2 ? "bg-zinc-900/40" : "bg-zinc-900/20"
                 }
               >
-                <div className="flex border-b border-zinc-800">
+                <div className="flex w-fit border-b border-zinc-800 text-xs hover:bg-zinc-950/75 transition-all">
+                  {/* Row number cell */}
+                  <div className="w-9 px-3 py-1 text-zinc-400 text-right font-medium flex-shrink-0 border-r border-zinc-800">
+                    {virtualRow.index + 1}
+                  </div>
+                  {/* Data cells */}
                   {result.columns.map((c) => (
                     <div
                       key={c}
-                      className="px-3 py-1 max-w-32 overflow-hidden text-ellipsis flex-shrink-0 text-xs"
-                      style={{ minWidth: "128px" }} // Consistent column width
+                      className="px-3 py-1 overflow-hidden text-ellipsis flex-shrink-0 text-xs border-r border-zinc-700 "
+                      style={{ width: "128px" }}
                     >
                       {formatCell(row[c])}
                     </div>
