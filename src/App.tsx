@@ -29,9 +29,9 @@ function App() {
               <Sidebar />
               <div className="flex-1 flex flex-col min-w-0">
                 <QueryInterface />
-                <BottomBar />
               </div>
             </div>
+            <BottomBar />
           </div>
         </TooltipProvider>
       </QueryDataProvider>

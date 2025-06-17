@@ -8,7 +8,7 @@ import {
 import MonacoEditor, { OnMount } from "@monaco-editor/react";
 
 import * as monacoEditor from "monaco-editor";
-import { FileCode, Play, Plus, RefreshCcw, X } from "lucide-react";
+import { FileCode, Play, PlayCircle, Plus, RefreshCcw, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 // import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -85,6 +85,8 @@ export function SqlEditor() {
     useQueryData();
   const [schema, setSchema] = useState<DatabaseSchema | null>(null);
   const [queryContent, setQueryContent] = useState("");
+  const [selectedText, setSelectedText] = useState("");
+  const [hasSelection, setHasSelection] = useState(false);
   const { databases } = useAppData();
   const [thinking, setThinking] = useState(false);
   const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(
@@ -129,15 +131,12 @@ export function SqlEditor() {
         });
       }
     };
-
     // Use ResizeObserver to detect container size changes
     const resizeObserver = new ResizeObserver(handleResize);
     const editorContainer = document.querySelector(".monaco-editor");
-
     if (editorContainer) {
       resizeObserver.observe(editorContainer.parentElement || editorContainer);
     }
-
     return () => {
       resizeObserver.disconnect();
     };
@@ -147,8 +146,28 @@ export function SqlEditor() {
     handleChange(queryContent);
   }, [queryContent]);
 
+  // Track selection changes
+  const handleSelectionChange = useCallback(() => {
+    if (editorRef.current) {
+      const selection = editorRef.current.getSelection();
+      if (selection && !selection.isEmpty()) {
+        const selectedText =
+          editorRef.current.getModel()?.getValueInRange(selection) || "";
+        setSelectedText(selectedText.trim());
+        setHasSelection(selectedText.trim().length > 0);
+      } else {
+        setSelectedText("");
+        setHasSelection(false);
+      }
+    }
+  }, []);
+
   const handleMount: OnMount = async (editor, monaco) => {
     editorRef.current = editor;
+
+    // Listen for selection changes
+    editor.onDidChangeCursorSelection(handleSelectionChange);
+
     monaco.editor.defineTheme("zinc-dark", {
       base: "vs-dark",
       inherit: true,
@@ -163,14 +182,24 @@ export function SqlEditor() {
     monaco.editor.setTheme("zinc-dark");
 
     if (!currentConnection) return;
+
     const _schema = await window.db.getFullSchema(currentConnection);
 
+    // Command to run full query
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () =>
-      console.log("Run query →", editor.getValue())
+      handleRunQuery()
     );
+
+    // Command to run selection (Ctrl/Cmd + Shift + Enter)
+    editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter,
+      () => handleRunSelection()
+    );
+
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () =>
       editor.trigger("keyboard", "editor.action.triggerSuggest", undefined)
     );
+
     const disposable = monaco.languages.registerCompletionItemProvider(
       "sql",
       createSchemaCompletionProvider(_schema, currentConnection)
@@ -231,6 +260,12 @@ export function SqlEditor() {
     }
   }
 
+  async function handleRunSelection() {
+    if (currentQuery && currentConnection && hasSelection && selectedText) {
+      await runQuery(currentConnection, selectedText);
+    }
+  }
+
   async function handleClearQuery() {
     if (currentQuery) {
       const clearedQuery = { ...currentQuery, query: "" };
@@ -244,7 +279,7 @@ export function SqlEditor() {
         <QueryTabs />
         <div className="w-full border-b border-zinc-800 p-2 font-mono text-xs text-zinc-500 flex items-center gap-2">
           {currentConnection && <DBInformation db={currentConnection} />}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <Tooltip delayDuration={700}>
               <TooltipTrigger>
                 <Button
@@ -256,9 +291,28 @@ export function SqlEditor() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                Run query <Kbd cmd="⌘R" />
+                Run query <Kbd cmd="⌘↵" />
               </TooltipContent>
             </Tooltip>
+
+            {/* Run Selection Button - only show when text is selected */}
+
+            <Tooltip delayDuration={700}>
+              <TooltipTrigger>
+                <Button
+                  disabled={!hasSelection}
+                  onClick={() => handleRunSelection()}
+                  variant="ghost"
+                  className="has-[>svg]:p-1.5 h-fit"
+                >
+                  <PlayCircle className="size-3.5 text-blue-500" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Run selection <Kbd cmd="⌘⇧↵" />
+              </TooltipContent>
+            </Tooltip>
+
             <Tooltip delayDuration={700}>
               <TooltipTrigger>
                 <Button
@@ -322,7 +376,6 @@ export function SqlEditor() {
           )}
         </div>
       </div>
-
       <EditorAgent
         schema={schema}
         query={queryContent}
