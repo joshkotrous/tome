@@ -49,7 +49,7 @@ export default function BottomBar() {
       snapThreshold={60}
       isCollapsed={!open}
       onCollapsedChange={(collapsed) => setOpen(!collapsed)}
-      className="bg-zinc-900 border-t border-zinc-800 rounded-t-md"
+      className="bg-zinc-900 border-t border-zinc-800"
       collapsedSize={32}
     >
       <div className="border-b w-full pl-3 flex justify-between items-center py-1">

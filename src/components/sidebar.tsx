@@ -85,7 +85,7 @@ export default function Sidebar() {
       snapThreshold={60}
       isCollapsed={!open}
       onCollapsedChange={(collapsed) => setOpen(!collapsed)}
-      className="bg-zinc-900 border border-zinc-800 h-full rounded-r-md"
+      className="bg-zinc-900 border border-zinc-800 h-full"
       collapsedSize={40}
     >
       {open && (

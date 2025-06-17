@@ -823,7 +823,7 @@ function EditorAgent({
       maxSize={800}
       snapThreshold={60}
       side="left"
-      className="h-full border-l rounded-l-lg bg-zinc-900/50"
+      className="h-full border-l bg-zinc-900/50"
     >
       {collapsed && (
         <Button
