@@ -114,7 +114,6 @@ export function SqlEditor() {
   async function getData() {
     if (currentConnection) {
       const _schema = await window.db.getFullSchema(currentConnection);
-      console.log(JSON.stringify(schema, null, 2));
       setSchema(_schema);
     }
   }
@@ -434,57 +433,148 @@ function EditorAgent({
       return;
 
     const queryObject = z.object({
-      queryInstrucions: z
-        .string()
+      query: z.string().describe("The new query to replace or apppend"),
+      mode: z
+        .enum(["append", "replace"])
         .describe(
-          "Instructions on what query to generate. Include context from the schema about the query to generate"
+          "Whether to append the existing query or replace it from the whole thing.  If mode is append, only the new query snippet that should be applied. Dont include the existing query"
         ),
     });
 
     const tools: ToolMap = {
       updateQuery: tool({
         description:
-          "A secondary agent to use to update the query. If there is an existing query, be sure its included in the newly generated version",
+          "Update the query by either replacing the entire query or appending to it.",
         parameters: queryObject,
-        execute: async ({ queryInstrucions }) => {
+        execute: async ({ query: newQuery, mode }) => {
           if (
             !settings?.aiFeatures.enabled ||
             (!settings.aiFeatures.providers.openai.enabled &&
               !settings.aiFeatures.providers.anthropic.enabled)
           )
             return;
-          console.log("INSTRUCTIONs", queryInstrucions);
-          onQueryChange("");
-          const streamResult = streamResponse({
-            apiKey:
-              model.provider === "Open AI"
-                ? settings.aiFeatures.providers.openai.apiKey
-                : settings.aiFeatures.providers.anthropic.apiKey,
-            model: model.name,
-            toolCallStreaming: true,
-            provider: model.provider,
 
-            messages: [{ role: "user", content: queryInstrucions }],
-            system: `You are a helpful database administrator embedded in a database client. You are provided with instructions on what query to generate and you are to generate the query only. No prose or backticks. Include 2 new lines at the end. This is the currently connected database: ${JSON.stringify(
-              currentConnection,
-              null,
-              2
-            )} Here is the full database schema ${JSON.stringify(
-              schema,
-              null,
-              2
-            )}
-            
-            QUERY CONSIDERATIONS:
-            1. If the engine is Postgres, any column names or table names in camel case MUST be surrounded by double quotes.`,
-            onChunk: ({ chunk }) => {
-              if (chunk.type === "text-delta") {
-                onQueryChange((prev) => prev + chunk.textDelta);
-              }
-            },
-          });
-          await streamResult.consumeStream();
-          return await streamResult.text;
+          console.log("Updating query with mode:", mode, "Query:", newQuery);
+
+          if (mode === "replace") {
+            // Clear query first
+            onQueryChange("");
+
+            // Add a small delay to ensure clearing is processed
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            // Split the new query into lines
+            const queryLines = newQuery.split("\n");
+
+            // Sequentially add each line
+            for (let i = 0; i < queryLines.length; i++) {
+              const line = queryLines[i];
+              const isLastLine = i === queryLines.length - 1;
+
+              onQueryChange((prev) => {
+                // Add the line and a newline (except for the last line to avoid trailing newline)
+                return prev + line + (isLastLine ? "" : "\n");
+              });
+
+              // Small delay between each line for visual effect
+              await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+
+            return `Successfully replaced the entire query with new content.`;
+          } else if (mode === "append") {
+            // Add newlines to separate from existing content if query is not empty
+            const separator = query.trim() ? "\n\n" : "";
+            const contentToAppend = separator + newQuery;
+            const appendLines = contentToAppend.split("\n");
+
+            // Sequentially add each line of the appended content
+            for (let i = 0; i < appendLines.length; i++) {
+              const line = appendLines[i];
+              const isLastLine = i === appendLines.length - 1;
+
+              onQueryChange((prev) => {
+                // Add the line and a newline (except for the last line to avoid trailing newline)
+                return prev + line + (isLastLine ? "" : "\n");
+              });
+
+              // Small delay between each line for visual effect
+              await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+
+            return `Successfully appended new content to the existing query.`;
+          }
+
+          return "Invalid mode specified. Use 'replace' or 'append'.";
+        },
+      }),
+      updateQuerySection: tool({
+        description: "Use to update a section of the query",
+        parameters: z.object({
+          querySnippet: z
+            .string()
+            .describe("The new query snippet with updates applied"),
+          startLine: z
+            .number()
+            .describe(
+              "The start line where the update should be made (1-based)"
+            ),
+          endLine: z
+            .number()
+            .describe("The end line where the update should be made (1-based)"),
+        }),
+        execute: async ({ querySnippet, startLine, endLine }) => {
+          // Split the current query into lines
+          const queryLines = query.split("\n");
+
+          // Convert 1-based line numbers to 0-based array indices
+          const startIndex = Math.max(0, startLine - 1);
+          const endIndex = Math.max(0, endLine - 1);
+
+          // Validate line numbers
+          if (startIndex >= queryLines.length) {
+            throw new Error(
+              `Start line ${startLine} is beyond the query length (${queryLines.length} lines)`
+            );
+          }
+
+          console.log("Updating query with ", querySnippet, startLine, endLine);
+
+          // Split the query snippet into lines
+          const snippetLines = querySnippet.split("\n");
+
+          // Get the parts of the query that will remain unchanged
+          const beforeLines = queryLines.slice(0, startIndex);
+          const afterLines = queryLines.slice(endIndex + 1);
+
+          // Build the base query with unchanged parts
+          const baseQuery = [
+            ...beforeLines,
+            ...new Array(snippetLines.length).fill(""), // Placeholder for new lines
+            ...afterLines,
+          ].join("\n");
+
+          // Set the base structure first
+          onQueryChange(baseQuery);
+
+          // Add a small delay
+          await new Promise((resolve) => setTimeout(resolve, 10));
+
+          // Now sequentially replace each placeholder with the actual snippet line
+          for (let i = 0; i < snippetLines.length; i++) {
+            const snippetLine = snippetLines[i];
+            const targetLineIndex = startIndex + i;
+
+            onQueryChange((prev) => {
+              const lines = prev.split("\n");
+              lines[targetLineIndex] = snippetLine;
+              return lines.join("\n");
+            });
+
+            // Small delay between each line for visual effect
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          }
+
+          return `Successfully updated lines ${startLine}-${endLine} with the new query snippet.`;
         },
       }),
       runQuery: tool({
@@ -542,6 +632,10 @@ function EditorAgent({
         2
       )}
       
+
+      This is the full schema: 
+      ${JSON.stringify(schema, null, 2)}
+
       The current query within the tags is the query currently displayed in the editor. If the user asks questions about the current query, or without much context. This is the query they're talking about. In this case, dont refer to queries in previous messages unless specifically asked by the user. 
       BEHAVIOR GUIDELINES:
       1. When a user is asking about a query, they're asking about the contents query in the **editor**, which is within <current_query>. This should be the basis of any of your explanations.
@@ -553,7 +647,8 @@ function EditorAgent({
       3. Use the getSchema tool to get the full schema from the database to assist you in writing the query.
       4. When using the sub agent to generate a query, provide full and complete instructions with context from the schema to ensure it is production ready and works as expected.
       5. Use the runQuery tool to run the generated query and test to ensure its valid. If you encounter an error, update the query to fix it.
-      6. If adjustments to the query are required, make sure to run updateQuery with the final updated query
+      6. If the query is initially empty or has to be completely rewritten, use the updateQuery tool to update the query using a subagent
+      7. If only a piece of the query needs to be updated, use the updateQuerySection tool to only update that section with the applicable snippet replacement
       
       QUERY CONSIDERATIONS:
       1. If the engine is Postgres, any column names or table names in camel case MUST be surrounded by double quotes.`,

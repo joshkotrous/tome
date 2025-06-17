@@ -715,7 +715,10 @@ function toolDisplay(message: Omit<ConversationMessage, "id">) {
     return "Retrieved schema";
   }
 
-  if (message.content === "updateQuery") {
+  if (
+    message.content === "updateQuery" ||
+    message.content === "updateQuerySection"
+  ) {
     if (message.toolCallStatus === "pending") {
       return "Updating query...";
     }
