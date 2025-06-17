@@ -334,18 +334,18 @@ export function SqlEditor() {
   );
 }
 
-function addLineNumbers(str: string) {
-  const lines = str.split("\n");
-  const maxLineNumber = lines.length;
-  const padding = String(maxLineNumber).length;
+// function addLineNumbers(str: string) {
+//   const lines = str.split("\n");
+//   const maxLineNumber = lines.length;
+//   const padding = String(maxLineNumber).length;
 
-  return lines
-    .map((line, i) => {
-      const lineNumber = String(i + 1).padStart(padding, " ");
-      return `${lineNumber} | ${line}`;
-    })
-    .join("\n");
-}
+//   return lines
+//     .map((line, i) => {
+//       const lineNumber = String(i + 1).padStart(padding, " ");
+//       return `${lineNumber} | ${line}`;
+//     })
+//     .join("\n");
+// }
 
 function EditorAgent({
   schema,
@@ -637,9 +637,7 @@ function EditorAgent({
           ...k,
           role: k.role as "user" | "assistant",
         })),
-      system: `You are a helpful database administrator embedded in a database client. Assist the user with any help they need with their database.\nThis is the current query: <current_query>${addLineNumbers(
-        query
-      )}</current_query>.\nThe currently connected database is ${JSON.stringify(
+      system: `You are a helpful database administrator embedded in a database client. Assist the user with any help they need with their database.\nThis is the current query: <current_query>${query}</current_query>.\nThe currently connected database is ${JSON.stringify(
         currentConnection,
         null,
         2
@@ -767,7 +765,7 @@ function EditorAgent({
     <ResizableContainer
       isCollapsed={collapsed}
       onCollapsedChange={setCollapsed}
-      defaultSize={224}
+      defaultSize={400}
       minSize={40}
       maxSize={800}
       snapThreshold={60}

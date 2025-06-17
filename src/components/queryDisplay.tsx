@@ -136,7 +136,7 @@ export function QueryResultTable({
               >
                 <div className="flex w-fit border-b border-zinc-800 text-xs hover:bg-zinc-950/75 transition-all">
                   {/* Row number cell */}
-                  <div className="w-9 px-3 py-1 text-zinc-400 text-right font-medium flex-shrink-0 border-r border-zinc-800">
+                  <div className="bg-zinc-950/50 w-9 px-3 py-1 text-zinc-400 text-right font-medium flex-shrink-0 border-r border-zinc-800">
                     {virtualRow.index + 1}
                   </div>
                   {/* Data cells */}
