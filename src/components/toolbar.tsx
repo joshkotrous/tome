@@ -291,7 +291,7 @@ export function AIFeaturesSettingsPage({
 
   if (!settings) {
     return (
-      <div className="pt-1 space-y-4 size-full flex items-center justify-center">
+      <div className="pt-1 space-y-4 size-full h-64 flex items-center justify-center">
         <Loader2 className="size-6 animate-spin" />
       </div>
     );
@@ -324,11 +324,11 @@ export function AIFeaturesSettingsPage({
               settings={settings}
               onSettingsChange={setSettings}
             />
-            <ConfigureProvider
+            {/* <ConfigureProvider
               provider="Anthropic"
               settings={settings}
               onSettingsChange={setSettings}
-            />
+            /> */}
           </>
         )}
 

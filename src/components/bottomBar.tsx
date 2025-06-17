@@ -92,7 +92,7 @@ export default function BottomBar() {
           </Tooltip>
         </div>
       </div>
-      {open && <QueryDisplay />}
+      <QueryDisplay />
     </ResizableContainer>
   );
 }

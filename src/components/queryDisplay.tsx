@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useQueryData } from "@/queryDataProvider";
 import Spinner from "./ui/spinner";
 import { JsonQueryResult } from "core/database";
@@ -62,6 +64,16 @@ export function QueryResultTable({
   result: JsonQueryResult | null | undefined;
   className?: string;
 }) {
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  // Create virtualizer for table rows - must be called before early returns
+  const rowVirtualizer = useVirtualizer({
+    count: result?.rows.length || 0,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 33, // Estimated row height in pixels
+    overscan: 10,
+  });
+
   if (!result) return null;
 
   if (result.rowCount === 0)
@@ -75,37 +87,67 @@ export function QueryResultTable({
 
   return (
     <div
-      className={`h-fit text-nowrap overflow-auto text-sm text-zinc-200 font-mono ${className}`}
+      ref={tableContainerRef}
+      className={`h-full text-nowrap overflow-auto text-sm text-zinc-200 font-mono ${className}`}
     >
-      <table className="h-full min-w-full border-collapse">
-        <thead className="sticky top-0 bg-zinc-800">
-          <tr>
+      <div className="min-w-full">
+        {/* Fixed Header */}
+        <div className="sticky top-0 bg-zinc-800 z-10 border-b border-zinc-700">
+          <div className="flex">
             {result.columns.map((c) => (
-              <th
+              <div
                 key={c}
-                className=" px-3 py-1 border-b border-zinc-700 text-left font-semibold whitespace-nowrap"
+                className="px-3 py-1 text-left font-semibold whitespace-nowrap flex-shrink-0 text-sm"
+                style={{ minWidth: "128px" }} // Consistent column width
               >
                 {c}
-              </th>
+              </div>
             ))}
-          </tr>
-        </thead>
+          </div>
+        </div>
 
-        <tbody className="h-full">
-          {result.rows.map((row, i) => (
-            <tr key={i} className={i % 2 ? "bg-zinc-900/40" : "bg-zinc-900/20"}>
-              {result.columns.map((c) => (
-                <td
-                  key={c}
-                  className="px-3 py-1 border-b border-zinc-800 max-w-32 overflow-hidden text-ellipsis"
-                >
-                  {formatCell(row[c])}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        {/* Virtualized Rows */}
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const row = result.rows[virtualRow.index];
+            return (
+              <div
+                key={virtualRow.key}
+                data-index={virtualRow.index}
+                ref={rowVirtualizer.measureElement}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+                className={
+                  virtualRow.index % 2 ? "bg-zinc-900/40" : "bg-zinc-900/20"
+                }
+              >
+                <div className="flex border-b border-zinc-800">
+                  {result.columns.map((c) => (
+                    <div
+                      key={c}
+                      className="px-3 py-1 max-w-32 overflow-hidden text-ellipsis flex-shrink-0 text-xs"
+                      style={{ minWidth: "128px" }} // Consistent column width
+                    >
+                      {formatCell(row[c])}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

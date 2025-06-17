@@ -34,6 +34,7 @@ import { useAppData } from "@/applicationDataProvider";
 import { TomeAgentModel, TomeAgentModels } from "../../core/ai";
 import { useQueryData } from "@/queryDataProvider";
 import { AIProviderLogo } from "./toolbar";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -188,6 +189,15 @@ export function ChatInputDisplay({
   const { currentConnection, currentQuery } = useQueryData();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // Create virtualizer for messages with proper measurement
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 100, // Estimate message height
+    overscan: 5,
+  });
+
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTo({
@@ -196,21 +206,46 @@ export function ChatInputDisplay({
       });
     }
   }, [thinking, messages]);
-
   return (
     <div
       ref={scrollContainerRef}
       className="flex flex-col flex-1 h-full overflow-auto mx-auto w-full max-w-5xl"
     >
       <div className="flex flex-col flex-1 p-4 pb-6 gap-2">
-        {messages.map((i) => (
-          <div
-            key={i.id}
-            className={cn("flex", i.role === "user" && "justify-end")}
-          >
-            <ChatMessage sendMessage={sendMessage} message={i} />
-          </div>
-        ))}
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const message = messages[virtualItem.index];
+            return (
+              <div
+                key={virtualItem.key}
+                data-index={virtualItem.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                <div
+                  className={cn(
+                    "flex py-1",
+                    message.role === "user" && "justify-end"
+                  )}
+                >
+                  <ChatMessage sendMessage={sendMessage} message={message} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
         {thinking && <AnimatedEllipsis size="lg" />}
       </div>
       <div className=" flex flex-col gap-2 sticky justify-center items-center w-full bottom-0 left-0 px-4">
@@ -223,7 +258,6 @@ export function ChatInputDisplay({
               </div>
             )}
           </div>
-
           <ChatInput
             thinking={thinking}
             model={model}
