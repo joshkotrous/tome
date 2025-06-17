@@ -77,7 +77,7 @@ export default function ChatInterface() {
       convo = newConversation.id;
       setSelectedConversation(newConversation.id);
     }
-    send(msg.content, model, convo ?? undefined);
+    send(msg.content, model, convo);
     setInput("");
   }
 

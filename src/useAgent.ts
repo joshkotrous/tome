@@ -95,12 +95,11 @@ export function useAgent(options: UseAgentOptions = {}) {
         console.warn("Could not get settings");
         return;
       }
-      if (!settings.aiFeatures.apiKey) {
+      if (
+        !settings.aiFeatures.providers.openai.apiKey &&
+        !settings.aiFeatures.providers.anthropic.apiKey
+      ) {
         console.warn("API Key is not configured");
-        return;
-      }
-      if (!settings.aiFeatures.provider) {
-        console.warn("Provider is not configured");
         return;
       }
 
@@ -177,8 +176,8 @@ export function useAgent(options: UseAgentOptions = {}) {
             role: k.role as "user" | "assistant",
           })),
         system: systemPrompt,
-        apiKey: settings.aiFeatures.apiKey,
-        provider: settings.aiFeatures.provider,
+        apiKey: settings.aiFeatures.providers.openai.apiKey,
+        provider: "Open AI",
         toolCallStreaming: true,
         onChunk: ({ chunk }) => {
           console.log(chunk);
