@@ -218,7 +218,7 @@ export function SqlEditor() {
 
   if (queries.length === 0) {
     return (
-      <div className="flex flex-1 justify-center items-center flex-col gap-2 text-zinc-400">
+      <div className="flex flex-1 size-full justify-center items-center flex-col gap-2 text-zinc-400">
         Create a query to get started
         <NewQueryButton size="default" />
       </div>
@@ -368,7 +368,6 @@ function EditorAgent({
 
   useEffect(() => {
     setMessages(queryMessages);
-    console.log(queryMessages);
   }, [queryMessages]);
 
   useEffect(() => {
@@ -454,8 +453,6 @@ function EditorAgent({
           )
             return;
 
-          console.log("Updating query with mode:", mode, "Query:", newQuery);
-
           if (mode === "replace") {
             // Clear query first
             onQueryChange("");
@@ -537,8 +534,6 @@ function EditorAgent({
             );
           }
 
-          console.log("Updating query with ", querySnippet, startLine, endLine);
-
           // Split the query snippet into lines
           const snippetLines = querySnippet.split("\n");
 
@@ -610,7 +605,6 @@ function EditorAgent({
       }),
     };
 
-    console.log(query);
     const streamResult = streamResponse({
       apiKey:
         model.provider === "Open AI"
@@ -732,7 +726,6 @@ function EditorAgent({
         }
       },
       onFinish: ({ text }) => {
-        console.log(text);
         if (currentQuery) {
           window.messages.createMessage({
             content: text,

@@ -29,14 +29,15 @@ export async function initializeSettings(): Promise<{
 }> {
   try {
     await fs.access(settingsPath);
-    const settings = await fs.readFile(settingsPath);
+    const settings = await fs.readFile(settingsPath, "utf-8");
     try {
-      const parsedSettings = SettingsObject.parse(settings);
+      const parsedSettings = SettingsObject.parse(JSON.parse(settings));
       return {
         path: settingsPath,
         settings: parsedSettings,
       };
     } catch (error) {
+      console.log(error);
       await fs.rm(settingsPath);
       await fs.writeFile(
         settingsPath,

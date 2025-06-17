@@ -63,7 +63,6 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
     try {
       const connection = await window.db.getDatabase(conn.id);
       const result = await window.db.query(connection, query);
-      console.log("QUERY RESULT", JSON.stringify(result));
       const clonedResult = JSON.parse(JSON.stringify(result));
 
       setQueryResult(clonedResult);

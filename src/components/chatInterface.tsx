@@ -189,23 +189,22 @@ export function ChatInputDisplay({
   const { currentConnection, currentQuery } = useQueryData();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Create virtualizer for messages with proper measurement
   const virtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: () => 100, // Estimate message height
+    estimateSize: () => 100,
     overscan: 5,
   });
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (scrollContainerRef.current) {
+    if (scrollContainerRef.current && messages.length > 0) {
+      const totalSize = virtualizer.getTotalSize();
       scrollContainerRef.current.scrollTo({
-        top: scrollContainerRef.current.scrollHeight,
+        top: totalSize,
         behavior: "smooth",
       });
     }
-  }, [thinking, messages]);
+  }, [thinking, messages, virtualizer]);
   return (
     <div
       ref={scrollContainerRef}

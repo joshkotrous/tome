@@ -20,8 +20,6 @@ export async function listMessages(
   conversation?: number,
   query?: number
 ): Promise<ConversationMessage[]> {
-  console.log(query);
-
   if (conversation) {
     const messages = await db
       .select()
