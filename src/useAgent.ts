@@ -14,6 +14,41 @@ interface UseAgentOptions {
   setMessages?: Dispatch<SetStateAction<ConversationMessage[]>>;
 }
 
+/*
+ * A very small allow-list validator that prevents the AI tool from executing
+ * any SQL statement that could modify database state. Only read-only commands
+ * such as SELECT, WITH, SHOW, DESCRIBE and EXPLAIN are permitted.  Anything
+ * else (or multiple statements separated by a semicolon) will be rejected.
+ *
+ * NOTE: This is a defence-in-depth measure and intentionally simple; it does
+ * not try to do full SQL parsing, but it blocks the most dangerous keywords
+ * and multi-statement payloads that are sufficient for privilege-escalation
+ * or data-destruction attacks.
+ */
+function isReadOnlyQuery(query: string): boolean {
+  const cleaned = query
+    // strip single-line comments
+    .replace(/--.*?(\n|$)/g, "")
+    // strip multi-line comments
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .trim();
+
+  // Disallow multiple statements
+  if (cleaned.includes(";")) {
+    return false;
+  }
+
+  // Reject any forbidden keyword (mutating / DDL / privilege commands)
+  const forbidden = /(\bALTER\b|\bDROP\b|\bINSERT\b|\bUPDATE\b|\bDELETE\b|\bTRUNCATE\b|\bGRANT\b|\bREVOKE\b|\bCREATE\b|\bMERGE\b|\bCALL\b|\bREPLACE\b)/i;
+  if (forbidden.test(cleaned)) {
+    return false;
+  }
+
+  // Allow only recognised read-only commands at the beginning of the query
+  const allowedStarters = /^(SELECT|WITH|SHOW|DESCRIBE|EXPLAIN)\b/i;
+  return allowedStarters.test(cleaned);
+}
+
 export function useAgent(options: UseAgentOptions = {}) {
   const { connect, connected } = useDB();
   const { runQuery } = useQueryData();
@@ -56,6 +91,14 @@ export function useAgent(options: UseAgentOptions = {}) {
     connectionId: number,
     query: string
   ) {
+    // Prevent destructive queries from being executed by the AI tool
+    if (!isReadOnlyQuery(query)) {
+      return {
+        error:
+          "Blocked potentially destructive or unsupported SQL statement. Only read-only queries are allowed via AI tool.",
+      } as const;
+    }
+
     const conn = await getConnection(connectionName, connectionId);
     const res = await runQuery({ id: nanoid(4), connection: conn, query });
     return res && "error" in res
@@ -66,7 +109,7 @@ export function useAgent(options: UseAgentOptions = {}) {
   const tools: ToolMap = {
     runQuery: tool({
       description:
-        "Run a SQL query and return JSON rows. Select the most likely relevant connection from <databases> that should be used in the query",
+        "Run a read-only SQL query (SELECT/SHOW/DESCRIBE/EXPLAIN) and return JSON rows. Mutating or DDL statements are not allowed.",
       parameters: z.object({
         query: z.string(),
         connectionId: z.number(),
