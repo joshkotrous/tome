@@ -7,19 +7,109 @@ import { z } from "zod";
 import { useAppData } from "./applicationDataProvider";
 import { useQueryData } from "./queryDataProvider";
 import { nanoid } from "nanoid";
-import { ConversationMessage } from "./types";
+import { ConversationMessage, Database } from "./types";
 
 interface UseAgentOptions {
   messages?: ConversationMessage[];
   setMessages?: Dispatch<SetStateAction<ConversationMessage[]>>;
 }
 
+/* -------------------------------------------------------------------------- */
+/*                              Security helpers                              */
+/* -------------------------------------------------------------------------- */
+
+// Safety budget – limits the size of the result set returned from the DB
+const MAX_RESULT_ROWS = 100;
+
+// Only these SQL commands are considered safe. They must be the very first
+// keyword of the (single-statement) query.
+const SAFE_COMMANDS = [
+  "SELECT",
+  "WITH",
+  "EXPLAIN",
+  "SHOW",
+  "DESCRIBE",
+] as const;
+
+/**
+ * Check whether a DB connection is already established by the user and is
+ * therefore safe for the AI agent to use. The agent is NOT allowed to
+ * establish new connections on its own.
+ */
+function isConnectionAgentAccessible(
+  connectedDbs: ReturnType<typeof useDB>["connected"],
+  connectionId: number,
+  connectionName: string
+) {
+  return connectedDbs.some(
+    (d) => d.id === connectionId && d.name === connectionName
+  );
+}
+
+/** Remove comments & compress whitespace */
+function normaliseQuery(q: string) {
+  return (
+    q
+      .replace(/\/\*[\s\S]*?\*\//g, " ") // multi-line comments
+      .replace(/--.*$/gm, " ") // single-line comments
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
+/**
+ * Validate a query to ensure it is strictly read-only and bound by size.
+ * Throws an Error if any rule is violated.
+ */
+function sanitiseAndValidateQuery(original: string): string {
+  const stripped = normaliseQuery(original);
+
+  // Reject multi-statement queries (very naïve but practical)
+  const segments = stripped.split(/;/).filter(Boolean);
+  if (segments.length !== 1) {
+    throw new Error(
+      "Only single-statement, read-only queries are permitted for the AI agent."
+    );
+  }
+
+  const stmt = segments[0];
+  const firstKeyword = (stmt.match(/^(\w+)/i)?.[1] ?? "").toUpperCase();
+  if (!SAFE_COMMANDS.includes(firstKeyword as typeof SAFE_COMMANDS[number])) {
+    throw new Error(
+      `Command '${firstKeyword}' is not allowed – agent is restricted to read-only queries.`
+    );
+  }
+
+  // Black-list obvious mutating / side-effect keywords & functions
+  const UNSAFE_PATTERN = /\b(ALTER|CREATE|DELETE|DROP|GRANT|INSERT|MERGE|REINDEX|REPLACE|TRUNCATE|UPDATE|VACUUM|REFRESH|ANALYZE|CALL|EXECUTE|INTO|FOR\s+UPDATE|COPY|LOCK|SET|COMMENT|CLUSTER)\b/i;
+  if (UNSAFE_PATTERN.test(stmt)) {
+    throw new Error("Detected destructive or side-effect SQL – rejected.");
+  }
+
+  // Limit bypass: normalise/patch LIMIT clause to MAX_RESULT_ROWS
+  let patchedStmt = stmt;
+  const limitMatch = stmt.match(/\bLIMIT\s+(\d+)/i);
+  if (limitMatch) {
+    const value = parseInt(limitMatch[1], 10);
+    if (isNaN(value) || value > MAX_RESULT_ROWS) {
+      patchedStmt = stmt.replace(/\bLIMIT\s+\d+/i, `LIMIT ${MAX_RESULT_ROWS}`);
+    }
+  } else if (firstKeyword === "SELECT" || firstKeyword === "WITH") {
+    // Append LIMIT if missing for large SELECTs/CTEs
+    patchedStmt = `${stmt} LIMIT ${MAX_RESULT_ROWS}`;
+  }
+
+  return patchedStmt;
+}
+
+/* -------------------------------------------------------------------------- */
+
 export function useAgent(options: UseAgentOptions = {}) {
   const { connect, connected } = useDB();
   const { runQuery } = useQueryData();
   const { settings, databases } = useAppData();
 
-  // Use external state if provided, otherwise use internal state
+  // External / internal state handling
   const [internalMsgs, setInternalMsgs] = useState<ConversationMessage[]>([]);
   const msgs = options.messages ?? internalMsgs;
   const setMsgs = options.setMessages ?? setInternalMsgs;
@@ -28,19 +118,19 @@ export function useAgent(options: UseAgentOptions = {}) {
   const abortRef = useRef<AbortController>();
 
   async function getConnection(connectionName: string, connectionId: number) {
-    let conn =
-      connected.find(
-        (i) => i.name === connectionName && i.id === connectionId
-      ) ?? null;
-    if (!conn) {
-      const db = databases.find((i) => i.id === connectionId);
-      if (!db) {
-        throw new Error(`Could not find ${connectionId}`);
-      }
-      conn = await connect(db);
+    // Authorisation: only already-connected DBs are available to the agent
+    if (!isConnectionAgentAccessible(connected, connectionId, connectionName)) {
+      throw new Error("Database connection is not authorised for AI agent use.");
     }
+
+    const conn = connected.find(
+      (i) => i.name === connectionName && i.id === connectionId
+    );
+
     if (!conn) {
-      throw new Error(`Could not connect to ${connectionId}:${connectionName}`);
+      throw new Error(
+        `AI agent attempted to access a non-connected database (${connectionName}).`
+      );
     }
     return conn;
   }
@@ -56,17 +146,30 @@ export function useAgent(options: UseAgentOptions = {}) {
     connectionId: number,
     query: string
   ) {
+    // Validate query earlier to fail fast
+    const safeQuery = sanitiseAndValidateQuery(query);
+
     const conn = await getConnection(connectionName, connectionId);
-    const res = await runQuery({ id: nanoid(4), connection: conn, query });
+
+    const res = await runQuery({
+      id: nanoid(4),
+      connection: conn,
+      query: safeQuery,
+    });
+
+    // Defensive slice – limits output regardless of LIMIT clause manipulation
     return res && "error" in res
       ? res
-      : { totalCount: res?.rowCount, records: res?.rows.splice(0, 5) ?? [] };
+      : {
+          totalCount: res?.rowCount,
+          records: (res?.rows ?? []).slice(0, 5),
+        };
   }
 
   const tools: ToolMap = {
     runQuery: tool({
       description:
-        "Run a SQL query and return JSON rows. Select the most likely relevant connection from <databases> that should be used in the query",
+        `Run a strictly read-only SQL query (SELECT/EXPLAIN/WITH/SHOW) on an already-connected database. Destructive commands are blocked and a LIMIT ${MAX_RESULT_ROWS} is enforced.`,
       parameters: z.object({
         query: z.string(),
         connectionId: z.number(),
@@ -77,7 +180,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     }),
     getSchema: tool({
       description:
-        "Gets the full schema for a given connection. Used to get more context about the db you're querying to know what tables/columns you have access to",
+        "Return the full schema for an authorised connection so the agent can craft correct read-only queries.",
       parameters: z.object({
         connectionId: z.number(),
         connectionName: z.string(),
@@ -137,30 +240,19 @@ export function useAgent(options: UseAgentOptions = {}) {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
 
-      const systemPrompt = `You are an AI assistant embedded in a database client UI. Your role is to help the user with any request, using the available tools and database connections listed below:
+      const systemPrompt = `You are an AI assistant embedded in a database client UI. Your role is to help the user with any request, using the available tools and *already connected* database connections listed below:
       <databases>
-      ${JSON.stringify(databases, null, 2)}
+      ${JSON.stringify(connected, null, 2)}
       </databases>
       
       **Behavior Guidelines:**
-      - If a request requires a connection, use \`connectionName\` and \`connectionId\` from the <databases> list.
-      - If the user does not specify a database and multiple are available, ask them to choose.
+      - Use only the connections provided; you cannot create or open new ones.
+      - Only read-only queries (SELECT/EXPLAIN/WITH/SHOW) are allowed; the tool will reject anything else.
+      - The tool enforces LIMIT ${MAX_RESULT_ROWS} and returns a maximum of 5 preview rows.
       - When returning query results, always:
         - Show them in **table format**
-        - Include the **query used**
-        - Display only a **summary (a few records)**, not the full result set
-      - If asked to write a query, default to **executing it** unless it's **mutable or destructive**
-      - Always show any **queries you executed**
-      - End every response with a UI action tag: \`<ui_action>{action}</ui_action>\`
-      - Default to providing a summary of the query data including the total rows 
-      - If you're asked to run query or aggregate data without much context, query for data until you find one that returns more than 0 rows.
-      
-      **Query Instructions:**
-      - When working with postgres and you encounter a column in camel-case format, it must be wrapped with double quotes.
-      - Do not default to adding a limit to your queries unless requested
-      **UI Action Instructions:**
-      - If you need permission to run a query, set \`<ui_action>approve-query</ui_action>\`
-      - Otherwise, use \`<ui_action></ui_action>\` if no action is needed.
+        - Include the **final query used**
+      - Always end each response with a UI action tag: \`<ui_action>{action}</ui_action>\`.
       `;
 
       const streamResult = streamResponse({
@@ -176,7 +268,6 @@ export function useAgent(options: UseAgentOptions = {}) {
       for await (const textPart of streamResult.textStream) {
         setMsgs((m) => {
           const last = m[m.length - 1];
-          // append or start new chunk
           if (last?.role === "assistant" && !(last as any).toolTag) {
             return [
               ...m.slice(0, -1),
@@ -208,17 +299,14 @@ export function useAgent(options: UseAgentOptions = {}) {
         });
       }
 
-      // Get tool calls and results
+      // Tool calls / results logging
       const toolCalls = await finalResult.toolCalls;
       const toolResults = await finalResult.toolResults;
-
-      // If there were tool calls, add them to the conversation
       if (toolCalls && toolCalls.length > 0) {
         for (let i = 0; i < toolCalls.length; i++) {
           const toolCall = toolCalls[i];
           const toolResult = toolResults?.[i];
 
-          // Add tool call
           setMsgs((m) => [
             ...m,
             {
@@ -230,7 +318,6 @@ export function useAgent(options: UseAgentOptions = {}) {
             },
           ]);
 
-          // Add tool result if available
           if (toolResult) {
             setMsgs((m) => [
               ...m,
@@ -248,7 +335,7 @@ export function useAgent(options: UseAgentOptions = {}) {
 
       setThinking(false);
     },
-    [msgs, setMsgs, settings, databases]
+    [msgs, setMsgs, settings, connected]
   );
 
   const stop = () => abortRef.current?.abort();
