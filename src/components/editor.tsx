@@ -22,9 +22,8 @@ import ChatInterface, { ChatInputDisplay } from "./chatInterface";
 import { Switch } from "./ui/switch";
 import { AnimatePresence, motion } from "framer-motion";
 import { streamResponse, TomeAgentModel, ToolMap } from "../../core/ai";
-import { DatabaseSchema } from "core/database";
 import ResizableContainer from "./ui/resizableContainer";
-import { ConversationMessage, Query } from "@/types";
+import { ConnectionSchema, ConversationMessage, Query } from "@/types";
 import { z } from "zod";
 import { tool } from "ai";
 import { DBInformation } from "./sidebar";
@@ -83,7 +82,7 @@ export default function QueryInterface() {
 export function SqlEditor() {
   const { queries, currentQuery, runQuery, updateQuery, currentConnection } =
     useQueryData();
-  const [schema, setSchema] = useState<DatabaseSchema | null>(null);
+  const [schema, setSchema] = useState<ConnectionSchema | null>(null);
   const [queryContent, setQueryContent] = useState("");
   const [selectedText, setSelectedText] = useState("");
   const [hasSelection, setHasSelection] = useState(false);
@@ -115,7 +114,9 @@ export function SqlEditor() {
 
   async function getData() {
     if (currentConnection) {
-      const _schema = await window.db.getFullSchema(currentConnection);
+      const _schema = await window.connections.getConnectionSchema(
+        currentConnection.id
+      );
       setSchema(_schema);
     }
   }
@@ -183,7 +184,7 @@ export function SqlEditor() {
 
     if (!currentConnection) return;
 
-    const _schema = await window.db.getFullSchema(currentConnection);
+    const _schema = await window.connections.getFullSchema(currentConnection);
 
     // Command to run full query
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () =>
@@ -407,7 +408,7 @@ function EditorAgent({
   thinking,
   setThinking,
 }: {
-  schema: DatabaseSchema | null;
+  schema: ConnectionSchema | null;
   query: string;
   onQueryChange: React.Dispatch<SetStateAction<string>>;
   thinking: boolean;
@@ -460,7 +461,7 @@ function EditorAgent({
 
   async function getFullSchema(connectionName: string, connectionId: number) {
     const conn = await getConnection(connectionName, connectionId);
-    const schema = await window.db.getFullSchema(conn);
+    const schema = await window.connections.getConnectionSchema(conn.id);
     return schema;
   }
 
@@ -704,6 +705,7 @@ function EditorAgent({
       BEHAVIOR GUIDELINES:
       1. When a user is asking about a query, they're asking about the contents query in the **editor**, which is within <current_query>. This should be the basis of any of your explanations.
       2. Only refer to queries in previous messages if specifically asked by the user. Again they're generally asking about the contents within the editor by default, which is stored in <current_query>
+      3. If a query is nondestructive, default to using the runQuery tool to run the query
 
       TOOL USE INSTRUCTIONS:
       1. When a user asks you to write a query, generally default to updating it by using the updateQuery tool
@@ -714,8 +716,8 @@ function EditorAgent({
       6. If the query is initially empty or has to be completely rewritten, use the updateQuery tool to update the query using a subagent
       7. If only a piece of the query needs to be updated, use the updateQuerySection tool to only update that section with the applicable snippet replacement
       
-      QUERY CONSIDERATIONS:
-      1. If the engine is Postgres, any column names or table names in camel case MUST be surrounded by double quotes.`,
+      QUERY SYNTAX REQUIREMENTS:
+      1. If the engine is Postgres, any entity names in **camelCase MUST be surrounded by double quotes**.`,
       onChunk: ({ chunk }) => {
         if (chunk.type === "text-delta") {
           setMessages((m) => {

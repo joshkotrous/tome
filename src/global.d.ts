@@ -1,41 +1,44 @@
-import { DatabaseSchema, JsonQueryResult, TableDef } from "core/database";
+import { DatabaseSchema, JsonQueryResult, TableDef } from "core/connection";
 import {
   Conversation,
   ConversationMessage,
-  Database,
   ProxyRequestOptions,
   ProxyStreamResponse,
   Query,
   Settings,
   StreamData,
+  Connection,
+  IndexJob,
+  ConnectionSchema,
 } from "./types";
 
 export {};
 
-interface DbApi {
-  listDatabases: () => Promise<Database[]>;
-  getDatabase: (id: number) => Promise<Database>;
-  deleteDatabases: (ids: number[]) => Promise<void>;
-  updateDatabase: (id: number, values: Database) => Promise<Database>;
-  createDatabase: (values: Omit<Database, "id">) => Promise<Database>;
+interface ConnectionsApi {
+  listConnections: () => Promise<Connection[]>;
+  getConnection: (id: number) => Promise<Connection>;
+  deleteConnections: (ids: number[]) => Promise<void>;
+  updateConnection: (id: number, values: Connection) => Promise<Connection>;
+  createConnection: (values: Omit<Connection, "id">) => Promise<Connection>;
   testConnection: (
-    db: Omit<Database, "id">
+    db: Omit<Connection, "id">
   ) => Promise<{ success: boolean; error: string }>;
-  connect: (db: Database) => Promise<void>;
-  disconnect: (db: Database) => Promise<void>;
-  listRemoteDatabases: (db: Database) => Promise<string[]>;
-  listSchemas: (db: Database, targetDb?: string) => Promise<string[]>;
+  connect: (db: Connection) => Promise<void>;
+  disconnect: (db: Connection) => Promise<void>;
+  listRemoteDatabases: (db: Connection) => Promise<string[]>;
+  listSchemas: (db: Connection, targetDb?: string) => Promise<string[]>;
   listSchemaTables: (
-    db: Database,
+    db: Connection,
     targetSchema: string,
     targetDb?: string
   ) => Promise<TableDef[]>;
   query: (
-    db: Database,
+    db: Connection,
     sql: string,
     params?: any[]
   ) => Promise<JsonQueryResult>;
-  getFullSchema: (db: Database, targetDb?: string) => Promise<DatabaseSchema>;
+  getFullSchema: (db: Connection, targetDb?: string) => Promise<DatabaseSchema>;
+  getConnectionSchema: (connection: number) => Promise<ConnectionSchema>;
 }
 
 interface SettingsApi {
@@ -78,13 +81,21 @@ interface ProxyApi {
   ) => () => void;
 }
 
+interface JobsApi {
+  listIndexJobs: (
+    connection: number,
+    status?: IndexJob["status"]
+  ) => Promise<IndexJob[]>;
+}
+
 declare global {
   interface Window {
-    db: DbApi;
+    connections: ConnectionsApi;
     settings: SettingsApi;
     messages: MessagesApi;
     conversations: ConversationsApi;
     queries: QueriesApi;
     proxy: ProxyApi;
+    jobs: JobsApi;
   }
 }

@@ -6,15 +6,20 @@ export const DatabaseEngineObject = z.enum(["Postgres", "MySQL", "SQLite"]);
 
 export type DatabaseEngine = z.infer<typeof DatabaseEngineObject>;
 
-export type Connection = PGConnection | MYSQLConnection;
+export type ConnectionConfig = PGConnection | MYSQLConnection;
 
-export type Database = {
+export type ConnectionSettings = {
+  autoUpdateSemanticIndex: boolean;
+};
+
+export type Connection = {
   id: number;
   name: string;
   engine: DatabaseEngine;
   description: string | null;
-  connection: Connection;
+  connection: ConnectionConfig;
   createdAt: Date;
+  settings: ConnectionSettings;
 };
 
 export type AIProvider = "Open AI" | "Anthropic";
@@ -57,6 +62,55 @@ export type Query = {
   title: string;
 };
 
+export type TableSchema = {
+  table: Table;
+  columns: Column[];
+};
+
+export type SchemaDef = {
+  schema: Schema;
+  tables: TableSchema[];
+};
+
+export type DatabaseSchema = {
+  database: Database;
+  schemas: SchemaDef[];
+};
+
+export type ConnectionSchema = {
+  connection: Connection;
+  databases: DatabaseSchema[];
+};
+
+export type Schema = {
+  id: number;
+  database: number;
+  name: string;
+  description: string | null;
+};
+
+export type Database = {
+  id: number;
+  connection: number;
+  name: string;
+  description: string | null;
+};
+
+export type Table = {
+  id: number;
+  schema: number;
+  name: string;
+  description: string | null;
+};
+
+export type Column = {
+  id: number;
+  table: number;
+  name: string;
+  description: string | null;
+  type: string;
+};
+
 export interface ProxyResponse {
   ok: boolean;
   status: number;
@@ -87,3 +141,14 @@ export interface ProxyRequestOptions {
   headers?: Record<string, string>;
   body?: string;
 }
+
+export type IndexJob = {
+  id: number;
+  connection: number;
+  itemsToProcess: number | null;
+  itemsProcessed: number | null;
+  createdAt: Date;
+  completedAt: Date | null;
+  status: "done" | "processing" | "error";
+  error: string | null;
+};

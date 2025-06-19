@@ -7,11 +7,11 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { Database, Settings } from "./types";
+import { Connection, Settings } from "./types";
 import { parseBool } from "./lib/utils";
 
 interface AppDataContextValue {
-  databases: Database[];
+  databases: Connection[];
   settings: Settings | null;
   dbDataLoading: boolean;
   settingsDataLoading: boolean;
@@ -28,7 +28,7 @@ const AppDataContext = createContext<AppDataContextValue | undefined>(
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [dbDataLoading, setDbDataLoading] = useState(false);
   const [settingsDataLoading, setSettingsDataLoading] = useState(false);
-  const [databases, setDatabases] = useState<Database[]>([]);
+  const [databases, setDatabases] = useState<Connection[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
 
   // Initialize from localStorage, but will be overridden by settings if available
@@ -53,7 +53,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const getDbData = useCallback(async () => {
     setDbDataLoading(true);
     try {
-      const dbs = await window.db.listDatabases();
+      const dbs = await window.connections.listConnections();
       setDatabases(dbs);
     } catch (error) {
       console.error("Failed to load databases:", error);

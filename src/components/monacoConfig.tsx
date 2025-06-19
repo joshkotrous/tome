@@ -1,6 +1,6 @@
 import * as monacoEditor from "monaco-editor";
-import { DatabaseSchema } from "core/database";
 import { OnMount } from "@monaco-editor/react";
+import { DatabaseSchema } from "core/connections";
 
 export interface TableInfo {
   name: string;

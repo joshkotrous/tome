@@ -15,8 +15,7 @@ const require = createRequire(import.meta.url);
 const Database = require("better-sqlite3");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-export const dbPath = path.join(app.getPath("userData"), "tome.sqlite");
+const dbPath = path.join(app.getPath("userData"), "tome.sqlite");
 
 console.log("DB AT ", dbPath);
 
@@ -126,3 +125,4 @@ import "./handlers/conversations";
 import "./handlers/messages";
 import "./handlers/queries";
 import "./handlers/settings";
+import "./handlers/jobs";

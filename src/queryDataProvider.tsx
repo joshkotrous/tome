@@ -7,11 +7,11 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { JsonQueryResult } from "core/database";
-import { ConversationMessage, Database, Query } from "./types";
+import { JsonQueryResult } from "core/connections";
+import { ConversationMessage, Connection, Query } from "./types";
 
 interface QueryDataContextValue {
-  connections: Database[];
+  connections: Connection[];
   currentQuery: Query | null;
   setCurrentQuery: React.Dispatch<SetStateAction<Query | null>>;
   queries: Query[];
@@ -21,19 +21,19 @@ interface QueryDataContextValue {
   refreshQuery: () => Promise<void>;
   queryMessages: ConversationMessage[];
   runQuery: (
-    connection: Database,
+    connection: Connection,
     query: string
   ) => Promise<JsonQueryResult | undefined | { error: string }>;
   createQuery: (query: Omit<Query, "id">) => Promise<Query>;
   deleteQuery: (query: Query) => void;
   updateQuery: (updatedQuery: Query) => void;
   refreshQueries: () => void;
-  currentConnection: Database | null;
-  setCurrentConnection: React.Dispatch<SetStateAction<Database | null>>;
-  connected: Database[];
+  currentConnection: Connection | null;
+  setCurrentConnection: React.Dispatch<SetStateAction<Connection | null>>;
+  connected: Connection[];
   loadingDb: boolean;
-  connect: (db: Database) => Promise<Database | null>;
-  disconnect: (db: Database) => Promise<void>;
+  connect: (db: Connection) => Promise<Connection | null>;
+  disconnect: (db: Connection) => Promise<void>;
   setError: React.Dispatch<SetStateAction<string | null>>;
 }
 
@@ -42,13 +42,13 @@ const QueryDataContext = createContext<QueryDataContextValue | undefined>(
 );
 
 export function QueryDataProvider({ children }: { children: React.ReactNode }) {
-  const [connected, setConnected] = useState<Database[]>([]);
+  const [connected, setConnected] = useState<Connection[]>([]);
 
   const [currentQuery, setCurrentQuery] = useState<Query | null>(null);
-  const [currentConnection, setCurrentConnection] = useState<Database | null>(
+  const [currentConnection, setCurrentConnection] = useState<Connection | null>(
     null
   );
-  const [connections, setConnections] = useState<Database[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [queries, setQueries] = useState<Query[]>([]);
   const [loadingQuery, setLoadingQuery] = useState(false);
   const [queryResult, setQueryResult] = useState<JsonQueryResult | null>(null);
@@ -56,13 +56,13 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [loadingDb, setLoadingDb] = useState(false);
 
-  const runQuery = useCallback(async (conn: Database, query: string) => {
+  const runQuery = useCallback(async (conn: Connection, query: string) => {
     setLoadingQuery(true);
     // setQueryResult(null);
     setError(null);
     try {
-      const connection = await window.db.getDatabase(conn.id);
-      const result = await window.db.query(connection, query);
+      const connection = await window.connections.getConnection(conn.id);
+      const result = await window.connections.query(connection, query);
       const clonedResult = JSON.parse(JSON.stringify(result));
 
       setQueryResult(clonedResult);
@@ -84,7 +84,9 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
 
   const createQuery = useCallback(async (query: Omit<Query, "id">) => {
     const _query = await window.queries.createQuery(query);
-    const _connection = await window.db.getDatabase(_query.connection);
+    const _connection = await window.connections.getConnection(
+      _query.connection
+    );
     setCurrentConnection(_connection);
     setCurrentQuery(_query);
     refreshQueries();
@@ -106,13 +108,13 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const connect = useCallback(
-    async (db: Database) => {
+    async (db: Connection) => {
       // already connected?
       if (connected.some((c) => c.id === db.id)) return db;
 
       setLoadingDb(true);
       try {
-        await window.db.connect(db); // IPC bridge
+        await window.connections.connect(db); // IPC bridge
         setConnected((prev) => [...prev, db]); // add to list
         setError(null);
         return db;
@@ -128,12 +130,12 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const disconnect = useCallback(
-    async (db: Database) => {
+    async (db: Connection) => {
       if (!connected.some((c) => c.id === db.id)) return;
 
       setLoadingDb(true);
       try {
-        await window.db.disconnect(db); // pass which DB to close
+        await window.connections.disconnect(db); // pass which DB to close
         setConnected((prev) => prev.filter((c) => c.id !== db.id));
         setError(null);
       } catch (err: any) {
@@ -149,7 +151,7 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
   async function getData() {
     const _queries = await window.queries.listQueries();
     setQueries(_queries);
-    const _connections = await window.db.listDatabases();
+    const _connections = await window.connections.listConnections();
     setConnections(_connections);
     return _queries;
   }
