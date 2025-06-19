@@ -3,11 +3,11 @@ import { db } from "../../db";
 import * as schema from "../../db/schema";
 import { Column } from "../../src/types";
 
-export async function listColumns(database: number): Promise<Column[]> {
+export async function listColumns(table: number): Promise<Column[]> {
   const columns = await db
     .select()
     .from(schema.columns)
-    .where(eq(schema.columns.database, database));
+    .where(eq(schema.columns.table, table));
   return columns;
 }
 

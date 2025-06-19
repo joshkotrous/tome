@@ -4,6 +4,7 @@ import {
   deleteConnections,
   disconnect,
   getConnection,
+  getConnectionSchema,
   getFullSchema,
   listActive,
   listConnections,
@@ -177,6 +178,19 @@ ipcMain.handle(
   async (_event, db: ConnectionType, targetDb?: string) => {
     try {
       const schema = await getFullSchema(db, targetDb);
+      return schema;
+    } catch (error) {
+      console.error("Failed to get full schema");
+      throw error;
+    }
+  }
+);
+
+ipcMain.handle(
+  "connections:getConnectionSchema",
+  async (_event, connection: number) => {
+    try {
+      const schema = await getConnectionSchema(connection);
       return schema;
     } catch (error) {
       console.error("Failed to get full schema");

@@ -1,12 +1,17 @@
 import { db } from "../../db";
 import * as schema from "../../db/schema";
-import { ConnectionConfig, Connection } from "../../src/types";
+import {
+  ConnectionConfig,
+  Connection,
+  ConnectionSchema,
+} from "../../src/types";
 import { eq, inArray } from "drizzle-orm";
 import { Client, Pool as PgPool, QueryResult } from "pg";
 import { ConnectionConfig as MYSQLConnection } from "mysql";
 import { ConnectionConfig as PGConnection } from "pg";
-
 import * as mysql from "mysql";
+import { getDatabaseSchema, listDatabases } from "../databases";
+import { indexConnection } from "../semanticIndex";
 
 export async function listConnections(): Promise<Connection[]> {
   const dbs = await db.select().from(schema.connections);
@@ -22,18 +27,24 @@ export async function getConnection(id: number): Promise<Connection> {
 }
 
 export async function createConnection(
-  values: Omit<Connection, "id" | "createdAt">
+  values: Omit<Connection, "id" | "createdAt">,
+  index = true
 ): Promise<Connection> {
   // TODO: encrypt password
-  const database = await db
+  const [connection] = await db
     .insert(schema.connections)
     .values(values)
     .returning();
-  return database[0];
+  if (index) {
+    indexConnection(connection, connection.settings.autoUpdateSemanticIndex);
+  }
+  return connection;
 }
 
 export async function deleteConnections(ids: number[]): Promise<void> {
-  await db.delete(schema.connections).where(inArray(schema.databases.id, ids));
+  await db
+    .delete(schema.connections)
+    .where(inArray(schema.connections.id, ids));
 }
 
 export async function updateConnection(
@@ -43,7 +54,7 @@ export async function updateConnection(
   const updated = await db
     .update(schema.connections)
     .set(values)
-    .where(eq(schema.databases.id, id))
+    .where(eq(schema.connections.id, id))
     .returning();
   return updated[0];
 }
@@ -54,7 +65,6 @@ export async function testConnection(
   switch (db.engine) {
     case "Postgres":
       return await testPostgresConnection(db.connection);
-      break;
     default:
       throw new Error("Unsupported engine");
   }
@@ -87,7 +97,7 @@ async function testPostgresConnection(
 
 type Driver = PgPool | mysql.Connection;
 
-type ConnectionEntry = { db: Connection; driver: Driver };
+export type ConnectionEntry = { db: Connection; driver: Driver };
 
 const connections = new Map<number, ConnectionEntry>();
 
@@ -521,4 +531,26 @@ export async function getFullSchema(
       `Unable to retrieve schema for database '${databaseName}': ${error}`
     );
   }
+}
+
+export async function getConnectionSchema(
+  connectionId: number
+): Promise<ConnectionSchema> {
+  const connection = await getConnection(connectionId);
+  const databases = await listDatabases(connection.id);
+  const promises = databases.map((d) => getDatabaseSchema(d.id));
+  const results = await Promise.all(promises);
+  const databaseSchemas = results.flat();
+
+  // const [schma] = await db
+  //   .select()
+  //   .from(schema.connections)
+  //   .innerJoin(
+  //     schema.databases,
+  //     eq(schema.connections.id, schema.databases.connection)
+  //   )
+  //   .innerJoin(schema.schemas, eq(schema.schemas.database, schema.databases.id))
+  //   .innerJoin(schema.tables, eq(schema.tables.schema, schema.schemas.id))
+
+  return { connection, databases: databaseSchemas };
 }

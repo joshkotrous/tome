@@ -1,4 +1,10 @@
-import { Check, Database as DatabaseIcon, Loader2, X } from "lucide-react";
+import {
+  Check,
+  Database as DatabaseIcon,
+  Loader2,
+  Settings,
+  X,
+} from "lucide-react";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -23,6 +29,7 @@ import PostgresLogo from "./logos/postgres";
 import { useAppData } from "@/applicationDataProvider";
 import { MySQLLogo } from "./logos/mysql";
 import SQLiteLogo from "./logos/sqlite";
+import { Switch } from "./ui/switch";
 
 export default function AddDatabaseButton({
   size = "xs",
@@ -82,6 +89,9 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
     engine: "Postgres",
     name: "",
     createdAt: new Date(),
+    settings: {
+      autoUpdateSemanticIndex: false,
+    },
   });
 
   const [loading, setLoading] = useState(false);
@@ -149,6 +159,9 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
         engine: "Postgres",
         name: "",
         createdAt: new Date(),
+        settings: {
+          autoUpdateSemanticIndex: false,
+        },
       });
     }
   }, [open]);
@@ -346,14 +359,103 @@ export function ConnectionDetailsForm({
     | React.Dispatch<SetStateAction<Omit<Connection, "id">>>
     | React.Dispatch<SetStateAction<Connection>>;
 }) {
-  switch (values.engine) {
-    case "Postgres":
-      return <GeneralConnectionForm values={values} onChange={onChange} />;
-    case "MySQL":
-      return <></>;
-    case "SQLite":
-      return <></>;
+  const [selectedPage, setSelectedPage] = useState<string>("Connection");
+
+  function getForm() {
+    switch (values.engine) {
+      case "Postgres":
+        return <GeneralConnectionForm values={values} onChange={onChange} />;
+      case "MySQL":
+        return <></>;
+      case "SQLite":
+        return <></>;
+    }
   }
+
+  function displayPage() {
+    switch (selectedPage) {
+      case "Connection":
+        return getForm();
+      case "Advanced":
+        return (
+          <AdvancedConnectionSettingsForm values={values} onChange={onChange} />
+        );
+    }
+  }
+
+  const pageOptions = [
+    {
+      title: "Connection",
+      icon: DatabaseIcon,
+    },
+    { title: "Advanced", icon: Settings },
+  ];
+
+  return (
+    <div className="flex w-full gap-2">
+      {" "}
+      <div className="w-48">
+        <div className="flex size-full gap-4">
+          <div className="h-full  flex flex-col w-36 items-end border-r pr-2 gap-2">
+            {pageOptions.map((i) => (
+              <Button
+                key={i.title}
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedPage(i.title)}
+                className={cn(
+                  `w-full flex gap-1.5 items-center justify-end`,
+                  i.title === selectedPage && "bg-zinc-800"
+                )}
+              >
+                <i.icon className="size-4" /> {i.title}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="w-full">{displayPage()}</div>
+    </div>
+  );
+}
+
+function AdvancedConnectionSettingsForm({
+  values,
+  onChange,
+}: {
+  values: Omit<Connection, "id"> | Connection;
+  onChange:
+    | React.Dispatch<SetStateAction<Omit<Connection, "id">>>
+    | React.Dispatch<SetStateAction<Connection>>;
+}) {
+  return (
+    <div className="size-full min-h-72 space-y-3">
+      <h2 className="font-semibold">Advanced</h2>
+      <div className="bg-zinc-800 w-full rounded-md p-4 space-y-1">
+        <div className="flex justify-between">
+          <h3 className="text-sm font-semibold">
+            Automatically Update Semantic Index
+          </h3>
+          <Switch
+            checked={values.settings?.autoUpdateSemanticIndex}
+            onCheckedChange={(checked) =>
+              onChange((prev: any) => ({
+                ...prev,
+                settings: {
+                  ...prev.settings,
+                  autoUpdateSemanticIndex: checked,
+                },
+              }))
+            }
+          />
+        </div>
+        <div className="text-xs text-zinc-400">
+          Automatically create and update the semantic index for Tome to use as
+          context
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function GeneralConnectionForm({

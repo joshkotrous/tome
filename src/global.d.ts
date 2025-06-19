@@ -8,6 +8,8 @@ import {
   Settings,
   StreamData,
   Connection,
+  IndexJob,
+  ConnectionSchema,
 } from "./types";
 
 export {};
@@ -36,6 +38,7 @@ interface ConnectionsApi {
     params?: any[]
   ) => Promise<JsonQueryResult>;
   getFullSchema: (db: Connection, targetDb?: string) => Promise<DatabaseSchema>;
+  getConnectionSchema: (connection: number) => Promise<ConnectionSchema>;
 }
 
 interface SettingsApi {
@@ -78,6 +81,13 @@ interface ProxyApi {
   ) => () => void;
 }
 
+interface JobsApi {
+  listIndexJobs: (
+    connection: number,
+    status?: IndexJob["status"]
+  ) => Promise<IndexJob[]>;
+}
+
 declare global {
   interface Window {
     connections: ConnectionsApi;
@@ -86,5 +96,6 @@ declare global {
     conversations: ConversationsApi;
     queries: QueriesApi;
     proxy: ProxyApi;
+    jobs: JobsApi;
   }
 }

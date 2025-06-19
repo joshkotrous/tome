@@ -26,3 +26,4 @@ import "./bridge/conversations";
 import "./bridge/messages";
 import "./bridge/queries";
 import "./bridge/settings";
+import "./bridge/jobs";

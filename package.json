@@ -87,8 +87,7 @@
     "dist:mac:arm": "electron-builder --mac --arm64 --publish=never",
     "dist:mac:x64": "electron-builder --mac --x64 --publish=never",
     "prebuild": "npm-run-all clean build:renderer build:main",
-    "preview": "vite preview",
-    "postinstall": "electron-builder install-app-deps"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",

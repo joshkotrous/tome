@@ -1,7 +1,6 @@
 import {
   ArchiveRestore,
   ChevronRight,
-  CircleCheck,
   Columns,
   DatabaseBackup,
   Database as DatabaseIcon,
@@ -9,6 +8,7 @@ import {
   Loader2,
   Pencil,
   Plug,
+  RefreshCcw,
   SidebarClose,
   Table,
   Trash,
@@ -19,7 +19,12 @@ import {
 import { Button } from "./ui/button";
 import { SetStateAction, useEffect, useRef, useState } from "react";
 import ResizableContainer from "./ui/resizableContainer";
-import { Connection, DatabaseEngine } from "@/types";
+import {
+  Connection,
+  ConnectionSchema,
+  DatabaseEngine,
+  IndexJob,
+} from "@/types";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -198,6 +203,7 @@ function ConnectionListItem({
 
 export function DBInformation({ db }: { db: Connection }) {
   const { connected, loadingDb: loading } = useQueryData();
+  const [indexJobs, setIndexJobs] = useState<IndexJob[]>([]);
 
   function displayLogo(engine: DatabaseEngine) {
     switch (engine) {
@@ -205,29 +211,55 @@ export function DBInformation({ db }: { db: Connection }) {
         return <PostgresLogo className="size-3" />;
     }
   }
+
+  async function getData() {
+    const jobs = await window.jobs.listIndexJobs(db.id, "processing");
+    setIndexJobs(jobs);
+  }
+
+  useEffect(() => {
+    // Initial data fetch
+    getData();
+
+    // Set up interval to refresh every 3 seconds
+    const interval = setInterval(getData, 3000);
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(interval);
+  }, [db.id]); // Added db.id as dependency to restart interval if db changes
+
   return (
-    <>
+    <div className="flex items-center gap-2 pl-1">
       {loading && <Spinner />}
       {connected.some((i) => i.id === db.id) && (
+        <div className="aspect-square size-2 bg-green-500 rounded-full blur-[2px]" />
+      )}
+      {indexJobs.length > 0 && (
         <div>
-          <CircleCheck className="size-3 text-green-500" />
+          <RefreshCcw className="size-3 animate-spin text-zinc-400" />{" "}
         </div>
       )}
       {displayLogo(db.engine)}
       {db.name}
       <span className="text-zinc-400 text-xs pl-1">{db.connection.host}</span>
-    </>
+    </div>
   );
 }
 
 function DatabaseList({ connection }: { connection: Connection }) {
   const { connected } = useQueryData();
   const [databases, setDatabases] = useState<string[]>([]);
+
+  const [schema, setSchema] = useState<ConnectionSchema | null>(null);
+
   const [loading, setLoading] = useState(false);
 
   const [open, setOpen] = useState(false);
 
   async function getData() {
+    const _schema = await window.connections.getConnectionSchema(connection.id);
+    setSchema(schema);
+    console.log("SCHEMA", JSON.stringify(_schema, null, 2));
     if (connected.some((i) => i.id === connection.id)) {
       setLoading(true);
       const dbs = await window.connections.listRemoteDatabases(connection);
@@ -446,7 +478,7 @@ function TableList({
           )}
         />
         <div className="text-sm flex gap-1 items-center">
-          <Table className="size-3 text-blue-500" /> Tables{" "}
+          <Table className="size-3 text-purple-500" /> Tables{" "}
           {loading && <Spinner className="size-3.5" />}
         </div>
       </div>
@@ -478,7 +510,7 @@ function TableListItem({ table }: { table: TableDef }) {
           )}
         />
         <div className="text-sm flex gap-1 items-center">
-          <Table className="size-3 text-blue-500" /> {table.table}
+          <Table className="size-3 text-purple-500" /> {table.table}
         </div>
       </div>
 
@@ -508,7 +540,7 @@ function ColumnList({ columns }: { columns: ColumnDef[] }) {
           )}
         />
         <div className="text-sm flex gap-1 items-center">
-          <Columns className="size-3 text-blue-500" /> Columns
+          <Columns className="size-3 text-zinc-400" /> Columns
         </div>
       </div>
 
@@ -518,7 +550,7 @@ function ColumnList({ columns }: { columns: ColumnDef[] }) {
 
           {columns.map((i) => (
             <div className="flex w-fit gap-1 items-center">
-              <Columns className="size-3 text-blue-500" />
+              <Columns className="size-3 text-zinc-400" />
               {i.name}
             </div>
           ))}
@@ -681,7 +713,7 @@ function DeleteDatabaseDialog({
           onClick={() => handleDelete()}
           variant="destructive"
         >
-          Remove Database{" "}
+          Remove Connection{" "}
           {loading && <Loader2 className="size-4 animate-spin" />}
         </Button>
         <DialogClose asChild>

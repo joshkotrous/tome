@@ -33,4 +33,6 @@ contextBridge.exposeInMainWorld("connections", {
     ipcRenderer.invoke("connections:query", db, sql, params),
   getFullSchema: (db: Connection, targetDb?: string) =>
     ipcRenderer.invoke("connections:getFullSchema", db, targetDb),
+  getConnectionSchema: (connection: Connection) =>
+    ipcRenderer.invoke("connections:getConnectionSchema", connection),
 });
