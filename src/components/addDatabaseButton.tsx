@@ -30,6 +30,7 @@ import { useAppData } from "@/applicationDataProvider";
 import { MySQLLogo } from "./logos/mysql";
 import SQLiteLogo from "./logos/sqlite";
 import { Switch } from "./ui/switch";
+import { Textarea } from "./ui/textarea";
 
 export default function AddDatabaseButton({
   size = "xs",
@@ -509,9 +510,10 @@ export function GeneralConnectionForm({
 
         <div className="space-y-2 col-span-2">
           <Label htmlFor="description">Description</Label>
-          <Input
+          <Textarea
             value={values.description ?? ""}
             id="description"
+            className="h-20 text-sm"
             placeholder="Optional notes or environment context"
             onChange={(e) =>
               handleTopLevelChange("description", e.target.value)

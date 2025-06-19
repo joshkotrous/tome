@@ -705,6 +705,7 @@ function EditorAgent({
       BEHAVIOR GUIDELINES:
       1. When a user is asking about a query, they're asking about the contents query in the **editor**, which is within <current_query>. This should be the basis of any of your explanations.
       2. Only refer to queries in previous messages if specifically asked by the user. Again they're generally asking about the contents within the editor by default, which is stored in <current_query>
+      3. If a query is nondestructive, default to using the runQuery tool to run the query
 
       TOOL USE INSTRUCTIONS:
       1. When a user asks you to write a query, generally default to updating it by using the updateQuery tool
@@ -715,8 +716,8 @@ function EditorAgent({
       6. If the query is initially empty or has to be completely rewritten, use the updateQuery tool to update the query using a subagent
       7. If only a piece of the query needs to be updated, use the updateQuerySection tool to only update that section with the applicable snippet replacement
       
-      QUERY CONSIDERATIONS:
-      1. If the engine is Postgres, any column names or table names in camel case MUST be surrounded by double quotes.`,
+      QUERY SYNTAX REQUIREMENTS:
+      1. If the engine is Postgres, any entity names in **camelCase MUST be surrounded by double quotes**.`,
       onChunk: ({ chunk }) => {
         if (chunk.type === "text-delta") {
           setMessages((m) => {

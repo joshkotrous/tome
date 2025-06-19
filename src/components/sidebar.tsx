@@ -808,7 +808,7 @@ function SidebarDetailsPanel({ selected }: { selected: SelectedEntity }) {
                 Name: {selected.value.name}
               </div>
               {selected.value.description && (
-                <div className="p-1.5 px-2 text-zinc-300 max-h-48 overflow-auto">
+                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
                   {selected.value.description}
                 </div>
               )}
@@ -823,7 +823,7 @@ function SidebarDetailsPanel({ selected }: { selected: SelectedEntity }) {
                 Name: {selected.value.name}
               </div>
               {selected.value.description && (
-                <div className="p-1.5 px-2 text-zinc-300 max-h-48 overflow-auto">
+                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
                   {selected.value.description}
                 </div>
               )}
@@ -838,7 +838,7 @@ function SidebarDetailsPanel({ selected }: { selected: SelectedEntity }) {
                 Name: {selected.value.name}
               </div>
               {selected.value.description && (
-                <div className="p-1.5 px-2 text-zinc-300 max-h-48 overflow-auto">
+                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
                   {selected.value.description}
                 </div>
               )}
@@ -856,7 +856,7 @@ function SidebarDetailsPanel({ selected }: { selected: SelectedEntity }) {
                 <div className="border-r p-1.5">Type</div> {selected.value.type}
               </div>
               {selected.value.description && (
-                <div className="p-1.5 px-2 text-zinc-300 max-h-48 overflow-auto">
+                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
                   {selected.value.description}
                 </div>
               )}

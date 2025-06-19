@@ -118,6 +118,7 @@ export const CONNECTION_DESCRIPTION_PROMPT = `You are a database documentation e
 
 Context:
 - Connection Name: {connectionName}
+- User provided description: {connectionDescription}
 - Database Engine: {connectionEngine}
 - Number of Databases: {databaseCount}
 - Connection Host: {connectionHost}

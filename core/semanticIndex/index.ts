@@ -497,6 +497,10 @@ export async function indexConnection(
           connection.name || "Unnamed Connection"
         )
           .replace("{connectionEngine}", connection.engine || "Unknown")
+          .replace(
+            "{connectionDescription}",
+            connection.description || "Unknown"
+          )
           .replace("{databaseCount}", databases.length.toString())
           .replace(
             "{connectionHost}",
