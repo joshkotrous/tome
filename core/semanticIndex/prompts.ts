@@ -1,6 +1,7 @@
 export const COLUMN_DESCRIPTION_PROMPT = `You are a database documentation expert. Generate a concise, informative description for this database column.
 
 Context:
+- Connection Description: {connectionDescription}
 - Database Schema: {schemaName}
 - Table: {tableName}
 - Column: {columnName}
@@ -33,6 +34,7 @@ Generate only the description text, no additional formatting or explanation.`;
 export const TABLE_DESCRIPTION_PROMPT = `You are a database documentation expert. Generate a comprehensive description for this database table.
 
 Context:
+- Connection Description: {connectionDescription}
 - Database Schema: {schemaName}
 - Table: {tableName}
 - Number of Columns: {columnCount}
@@ -63,6 +65,7 @@ Generate only the description text, no additional formatting or explanation.`;
 export const SCHEMA_DESCRIPTION_PROMPT = `You are a database documentation expert. Generate a comprehensive description for this database schema.
 
 Context:
+- Connection Description: {connectionDescription}
 - Schema Name: {schemaName}
 - Number of Tables: {tableCount}
 - Database Context: {databaseName}
@@ -90,6 +93,7 @@ Generate only the description text, no additional formatting or explanation.`;
 export const DATABASE_DESCRIPTION_PROMPT = `You are a database documentation expert. Generate a comprehensive description for this database.
 
 Context:
+- Connection Description: {connectionDescription}
 - Database Name: {databaseName}
 - Number of Schemas: {schemaCount}
 - Connection Type: {connectionType}
