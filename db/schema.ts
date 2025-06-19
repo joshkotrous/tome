@@ -49,7 +49,7 @@ export const queries = sqliteTable("queries", {
   id: integer("id").primaryKey({ autoIncrement: true }).notNull(),
   connection: integer()
     .notNull()
-    .references(() => connections.id),
+    .references(() => connections.id, { onDelete: "cascade" }),
   query: text().notNull(),
   createdAt: integer({ mode: "timestamp" }).notNull(),
   title: text().notNull(),

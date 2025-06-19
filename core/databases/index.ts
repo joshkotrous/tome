@@ -48,5 +48,6 @@ export async function getDatabaseSchema(
 ): Promise<DatabaseSchema> {
   const database = await getDatabase(databaseId);
   const schemas = await listSchemas(database.id);
-  return { database, schemas };
+  const schemaDefs = await Promise.all(schemas.map((s) => import('../schemas').then(m => m.getSchemaDef(s.id))));
+  return { database, schemas: schemaDefs };
 }

@@ -46,5 +46,6 @@ export async function deleteSchema(id: number): Promise<void> {
 export async function getSchemaDef(schemaId: number): Promise<SchemaDef> {
   const schma = await getSchema(schemaId);
   const tables = await listTables(schma.id);
-  return { schema: schma, tables };
+  const tableSchemas = await Promise.all(tables.map((t) => import('../tables').then(m => m.getTableSchema(t.id))));
+  return { schema: schma, tables: tableSchemas };
 }

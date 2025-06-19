@@ -22,9 +22,8 @@ import ChatInterface, { ChatInputDisplay } from "./chatInterface";
 import { Switch } from "./ui/switch";
 import { AnimatePresence, motion } from "framer-motion";
 import { streamResponse, TomeAgentModel, ToolMap } from "../../core/ai";
-import { DatabaseSchema } from "core/connections";
 import ResizableContainer from "./ui/resizableContainer";
-import { ConversationMessage, Query } from "@/types";
+import { ConnectionSchema, ConversationMessage, Query } from "@/types";
 import { z } from "zod";
 import { tool } from "ai";
 import { DBInformation } from "./sidebar";
@@ -83,7 +82,7 @@ export default function QueryInterface() {
 export function SqlEditor() {
   const { queries, currentQuery, runQuery, updateQuery, currentConnection } =
     useQueryData();
-  const [schema, setSchema] = useState<DatabaseSchema | null>(null);
+  const [schema, setSchema] = useState<ConnectionSchema | null>(null);
   const [queryContent, setQueryContent] = useState("");
   const [selectedText, setSelectedText] = useState("");
   const [hasSelection, setHasSelection] = useState(false);
@@ -115,7 +114,9 @@ export function SqlEditor() {
 
   async function getData() {
     if (currentConnection) {
-      const _schema = await window.connections.getFullSchema(currentConnection);
+      const _schema = await window.connections.getConnectionSchema(
+        currentConnection.id
+      );
       setSchema(_schema);
     }
   }
@@ -407,7 +408,7 @@ function EditorAgent({
   thinking,
   setThinking,
 }: {
-  schema: DatabaseSchema | null;
+  schema: ConnectionSchema | null;
   query: string;
   onQueryChange: React.Dispatch<SetStateAction<string>>;
   thinking: boolean;
@@ -460,7 +461,7 @@ function EditorAgent({
 
   async function getFullSchema(connectionName: string, connectionId: number) {
     const conn = await getConnection(connectionName, connectionId);
-    const schema = await window.connections.getFullSchema(conn);
+    const schema = await window.connections.getConnectionSchema(conn.id);
     return schema;
   }
 

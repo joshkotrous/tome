@@ -10,7 +10,7 @@ import { Client, Pool as PgPool, QueryResult } from "pg";
 import { ConnectionConfig as MYSQLConnection } from "mysql";
 import { ConnectionConfig as PGConnection } from "pg";
 import * as mysql from "mysql";
-import { getDatabaseSchema, listDatabases } from "../databases";
+import { listDatabases } from "../databases";
 import { indexConnection } from "../semanticIndex";
 
 export async function listConnections(): Promise<Connection[]> {
@@ -153,7 +153,7 @@ export interface JsonQueryResult {
   columns: string[];
   /** array of row objects                                             */
   rows: any[];
-  /** convenience duplicate of rows.length (or pg’s rowCount)          */
+  /** convenience duplicate of rows.length (or pg's rowCount)          */
   rowCount: number;
 }
 
@@ -262,7 +262,7 @@ export async function listRemoteDatabases(db: Connection): Promise<string[]> {
     }
 
     case "SQLite": {
-      // One file == one “database”
+      // One file == one "database"
       return [db.connection.database ?? ""];
     }
 
@@ -311,7 +311,7 @@ export async function listSchemas(
 
   /* -------------------------  MYSQL  -------------------------- */
   // if (db.engine === "MySQL") {
-  //   // MySQL’s “schema” == “database” → one per connection
+  //   // MySQL's "schema" == "database" → one per connection
   //   return [targetDb ?? db.connection.database];
   // }
 
@@ -376,7 +376,7 @@ export async function listSchemaTables(
   }
 
   // if (db.engine === "MySQL") {
-  //   // In MySQL a “schema” *is* a database; validate the request.
+  //   // In MySQL a "schema" *is* a database; validate the request.
   //   const schemaName = targetDb ?? db.connection.database;
   //   if (targetSchema && targetSchema !== schemaName) {
   //     throw new Error(
@@ -538,19 +538,9 @@ export async function getConnectionSchema(
 ): Promise<ConnectionSchema> {
   const connection = await getConnection(connectionId);
   const databases = await listDatabases(connection.id);
-  const promises = databases.map((d) => getDatabaseSchema(d.id));
+  const promises = databases.map((d) =>
+    import("../databases").then((m) => m.getDatabaseSchema(d.id))
+  );
   const results = await Promise.all(promises);
-  const databaseSchemas = results.flat();
-
-  // const [schma] = await db
-  //   .select()
-  //   .from(schema.connections)
-  //   .innerJoin(
-  //     schema.databases,
-  //     eq(schema.connections.id, schema.databases.connection)
-  //   )
-  //   .innerJoin(schema.schemas, eq(schema.schemas.database, schema.databases.id))
-  //   .innerJoin(schema.tables, eq(schema.tables.schema, schema.schemas.id))
-
-  return { connection, databases: databaseSchemas };
+  return { connection, databases: results };
 }
