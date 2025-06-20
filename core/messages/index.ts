@@ -1,11 +1,11 @@
-import { ConversationMessage } from "../../src/types";
+import { TomeMessage } from "../../src/types";
 import { db } from "../../db";
 import * as schema from "../../db/schema";
 import { asc, eq } from "drizzle-orm";
 
 export async function createMessage(
-  values: Omit<ConversationMessage, "id" | "createdAt">
-): Promise<ConversationMessage> {
+  values: Omit<TomeMessage, "id" | "createdAt">
+): Promise<TomeMessage> {
   const [message] = await db
     .insert(schema.messages)
     .values({ ...values, createdAt: new Date() })
@@ -19,7 +19,7 @@ export async function createMessage(
 export async function listMessages(
   conversation?: number,
   query?: number
-): Promise<ConversationMessage[]> {
+): Promise<TomeMessage[]> {
   if (conversation) {
     const messages = await db
       .select()

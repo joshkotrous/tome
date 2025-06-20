@@ -1,3 +1,4 @@
+import { UIMessage } from "ai";
 import { ConnectionConfig as MYSQLConnection } from "mysql";
 import { ConnectionConfig as PGConnection } from "pg";
 import { z } from "zod";
@@ -43,15 +44,9 @@ export type Conversation = {
   createdAt: Date;
 };
 
-export type ConversationMessage = {
-  id: number;
-  role: "assistant" | "user" | "tool-call";
-  content: string;
+export type TomeMessage = UIMessage & {
   conversation: number | null;
   query: number | null;
-  toolCallId: string | null;
-  toolCallStatus: "pending" | "error" | "complete" | null;
-  createdAt: Date;
 };
 
 export type Query = {

@@ -1,10 +1,11 @@
+import { UIMessage } from "ai";
 import {
   ConnectionConfig,
   ConnectionSettings,
   DatabaseEngine,
 } from "../src/types";
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-
+import { nanoid } from "nanoid";
 export const connections = sqliteTable("connections", {
   id: integer("id").primaryKey({ autoIncrement: true }).notNull(),
   name: text().notNull(),
@@ -31,18 +32,22 @@ export const conversations = sqliteTable("conversations", {
 });
 
 export const messages = sqliteTable("messages", {
-  id: integer("id").primaryKey({ autoIncrement: true }).notNull(),
-  role: text("role", { enum: ["assistant", "user", "tool-call"] }).notNull(),
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => nanoid(6)),
+  role: text("role", {
+    enum: ["assistant", "user", "data", "system"],
+  }).notNull(),
   content: text().notNull(),
   conversation: integer().references(() => conversations.id, {
     onDelete: "cascade",
   }),
-  query: integer().references(() => queries.id, { onDelete: "cascade" }),
-  toolCallId: text(),
-  toolCallStatus: text("toolCallStatus", {
-    enum: ["pending", "error", "complete"],
-  }),
+  parts: text("parts", { mode: "json" })
+    .$type<UIMessage["parts"]>()
+    .notNull()
+    .default([]),
   createdAt: integer({ mode: "timestamp" }).notNull(),
+  query: integer().references(() => queries.id, { onDelete: "cascade" }),
 });
 
 export const queries = sqliteTable("queries", {

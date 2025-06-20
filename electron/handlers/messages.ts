@@ -1,10 +1,10 @@
-import { ConversationMessage } from "@/types";
+import { TomeMessage } from "@/types";
 import { createMessage, listMessages } from "../../core/messages";
 import { ipcMain } from "electron";
 
 ipcMain.handle(
   "messages:createMessage",
-  async (_event, values: Omit<ConversationMessage, "id" | "createdAt">) => {
+  async (_event, values: Omit<TomeMessage, "id" | "createdAt">) => {
     try {
       const message = await createMessage(values);
       return message;

@@ -852,8 +852,8 @@ function SidebarDetailsPanel({ selected }: { selected: SelectedEntity }) {
               <div className="p-1.5 border-b font-mono">
                 Name: {selected.value.name}
               </div>
-              <div className="flex items-center gap-2 border-b font-mono">
-                <div className="border-r p-1.5">Type</div> {selected.value.type}
+              <div className="flex items-center gap-2 border-b font-mono p-1.5">
+                Type: {selected.value.type}
               </div>
               {selected.value.description && (
                 <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
