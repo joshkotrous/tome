@@ -5,11 +5,11 @@ import { streamResponse, TomeAgentModel, ToolMap } from "../core/ai";
 import { z } from "zod";
 import { useAppData } from "./applicationDataProvider";
 import { useQueryData } from "./queryDataProvider";
-import { ConversationMessage } from "./types";
+import { TomeMessage } from "./types";
 
 interface UseAgentOptions {
-  messages?: ConversationMessage[];
-  setMessages?: Dispatch<SetStateAction<ConversationMessage[]>>;
+  messages?: TomeMessage[];
+  setMessages?: Dispatch<SetStateAction<TomeMessage[]>>;
 }
 
 export function useAgent(options: UseAgentOptions = {}) {
@@ -18,7 +18,7 @@ export function useAgent(options: UseAgentOptions = {}) {
   const { settings, databases } = useAppData();
 
   // Use external state if provided, otherwise use internal state
-  const [internalMsgs, setInternalMsgs] = useState<ConversationMessage[]>([]);
+  const [internalMsgs, setInternalMsgs] = useState<TomeMessage[]>([]);
   const msgs = options.messages ?? internalMsgs;
   const setMsgs = options.setMessages ?? setInternalMsgs;
 
@@ -45,7 +45,7 @@ export function useAgent(options: UseAgentOptions = {}) {
 
   async function getFullSchema(connectionName: string, connectionId: number) {
     const conn = await getConnection(connectionName, connectionId);
-    const schema = await window.connections.getFullSchema(conn);
+    const schema = await window.connections.getConnectionSchema(conn.id);
     return schema;
   }
 
@@ -238,7 +238,7 @@ export function useAgent(options: UseAgentOptions = {}) {
                 return prevMsgs;
               }
 
-              const updatedMsg: ConversationMessage = {
+              const updatedMsg: TomeMessage = {
                 ...toolMsg,
                 toolCallStatus: "complete",
               };

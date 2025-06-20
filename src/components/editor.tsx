@@ -23,11 +23,13 @@ import { Switch } from "./ui/switch";
 import { AnimatePresence, motion } from "framer-motion";
 import { streamResponse, TomeAgentModel, ToolMap } from "../../core/ai";
 import ResizableContainer from "./ui/resizableContainer";
-import { ConnectionSchema, ConversationMessage, Query } from "@/types";
+import { ConnectionSchema, TomeMessage, Query } from "@/types";
 import { z } from "zod";
 import { tool } from "ai";
+import { ToolInvocationUIPart } from "@ai-sdk/ui-utils";
 import { DBInformation } from "./sidebar";
 import { createSchemaCompletionProvider } from "./monacoConfig";
+import { nanoid } from "nanoid";
 
 export default function QueryInterface() {
   const { agentModeEnabled, setAgentModeEnabled, settings } = useAppData();
@@ -328,24 +330,6 @@ export function SqlEditor() {
                 Clear query <Kbd cmd="⌘C" />
               </TooltipContent>
             </Tooltip>
-            {/* <GenerateQueryPopover
-              isGenerating={thinking}
-              setIsGenerating={setThinking}
-              value={query?.query ?? ""}
-              onChange={handleGeneratedQueryChange}
-            >
-              <Tooltip delayDuration={700}>
-                <TooltipTrigger>
-                  <Button variant="ghost" className="has-[>svg]:p-1.5 h-fit">
-                    <Sparkles className="size-3.5 text-purple-500" />
-                    {thinking && <Thinking className="text-xs" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Generate query <Kbd cmd="⌘G" />
-                </TooltipContent>
-              </Tooltip>
-            </GenerateQueryPopover> */}
           </div>
         </div>
         <div className="flex-1 w-full min-h-0">
@@ -388,19 +372,80 @@ export function SqlEditor() {
   );
 }
 
-// function addLineNumbers(str: string) {
-//   const lines = str.split("\n");
-//   const maxLineNumber = lines.length;
-//   const padding = String(maxLineNumber).length;
+export function updateMessagesWithToolResult(
+  messages: TomeMessage[],
+  result: unknown,
+  toolCallId?: string
+): TomeMessage[] {
+  if (messages.length === 0) return messages;
 
-//   return lines
-//     .map((line, i) => {
-//       const lineNumber = String(i + 1).padStart(padding, " ");
-//       return `${lineNumber} | ${line}`;
-//     })
-//     .join("\n");
-// }
+  // Copy the messages array and the last message
+  const updatedMessages = [...messages];
+  const lastMessage = { ...updatedMessages[updatedMessages.length - 1] };
 
+  // If no toolCallId provided, find the first pending tool
+  let targetToolCallId = toolCallId;
+  if (!targetToolCallId) {
+    // Look for first pending tool in parts
+    const pendingPart = lastMessage.parts?.find(
+      (part) =>
+        part.type === "tool-invocation" &&
+        part.toolInvocation.state === "partial-call"
+    );
+
+    if (pendingPart?.type !== "tool-invocation") {
+      return messages;
+    }
+
+    if (pendingPart) {
+      targetToolCallId = pendingPart.toolInvocation.toolCallId;
+    } else {
+      // Look for first pending tool in toolInvocations
+      const pendingInvocation = lastMessage.toolInvocations?.find(
+        (toolInvocation) => toolInvocation.state === "partial-call"
+      );
+      if (pendingInvocation) {
+        targetToolCallId = pendingInvocation.toolCallId;
+      }
+    }
+  }
+
+  // If still no target found, return unchanged
+  if (!targetToolCallId) {
+    console.warn("No pending tool invocation found to update");
+    return messages;
+  }
+
+  // Copy parts and toolInvocations for immutability
+  lastMessage.parts = lastMessage.parts?.map((part) =>
+    part.type === "tool-invocation" &&
+    part.toolInvocation.toolCallId === targetToolCallId
+      ? {
+          ...part,
+          toolInvocation: {
+            ...part.toolInvocation,
+            state: "result",
+            result,
+          },
+        }
+      : part
+  );
+
+  lastMessage.toolInvocations = lastMessage.toolInvocations?.map(
+    (toolInvocation) =>
+      toolInvocation.toolCallId === targetToolCallId
+        ? {
+            ...toolInvocation,
+            state: "result",
+            result,
+          }
+        : toolInvocation
+  );
+
+  // Replace the last message in the array
+  updatedMessages[updatedMessages.length - 1] = lastMessage;
+  return updatedMessages;
+}
 function EditorAgent({
   schema,
   query,
@@ -431,7 +476,9 @@ function EditorAgent({
     provider: "Open AI",
     name: "gpt-4o",
   });
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [messages, setMessages] = useState<TomeMessage[]>([]);
+
+  const [permissionNeeded, setPermissionNeeded] = useState(false);
 
   useEffect(() => {
     setMessages(queryMessages);
@@ -477,20 +524,7 @@ function EditorAgent({
       : { totalCount: res?.rowCount, records: res?.rows.splice(0, 5) ?? [] };
   }
 
-  async function sendMessage() {
-    setThinking(true);
-    setInput("");
-    if (!currentQuery) return;
-    const msg = await window.messages.createMessage({
-      content: input,
-      conversation: null,
-      query: currentQuery.id,
-      role: "user",
-      toolCallId: null,
-      toolCallStatus: null,
-    });
-    const newMessages: ConversationMessage[] = [...messages, msg];
-    setMessages(newMessages);
+  async function getAgentResponse(newMessages: TomeMessage[]) {
     if (
       !settings?.aiFeatures.enabled ||
       (!settings.aiFeatures.providers.openai.enabled &&
@@ -672,6 +706,10 @@ function EditorAgent({
         execute: async ({ connectionId, connectionName }) =>
           JSON.stringify(await getFullSchema(connectionName, connectionId)),
       }),
+      askForPermission: tool({
+        description: "Ask the user for permission to run destructive queries",
+        parameters: z.object({}),
+      }),
     };
 
     const streamResult = streamResponse({
@@ -685,12 +723,7 @@ function EditorAgent({
       tools,
       maxSteps: 10,
       toolChoice: "required",
-      messages: newMessages
-        .filter((i) => i.role !== "tool-call")
-        .map((k) => ({
-          ...k,
-          role: k.role as "user" | "assistant",
-        })),
+      messages: newMessages,
       system: `You are a helpful database administrator embedded in a database client. Assist the user with any help they need with their database.\nThis is the current query: <current_query>${query}</current_query>.\nThe currently connected database is ${JSON.stringify(
         currentConnection,
         null,
@@ -715,10 +748,12 @@ function EditorAgent({
       5. Use the runQuery tool to run the generated query and test to ensure its valid. If you encounter an error, update the query to fix it.
       6. If the query is initially empty or has to be completely rewritten, use the updateQuery tool to update the query using a subagent
       7. If only a piece of the query needs to be updated, use the updateQuerySection tool to only update that section with the applicable snippet replacement
+      8. You MUST Use the **askForPermission** tool to ask the user for permission to run a query, do NOT ask them inline. Once permission is provided, you MUST use the **runQuery** tool to run the query
       
       QUERY SYNTAX REQUIREMENTS:
       1. If the engine is Postgres, any entity names in **camelCase MUST be surrounded by double quotes**.`,
       onChunk: ({ chunk }) => {
+        console.log(chunk);
         if (chunk.type === "text-delta") {
           setMessages((m) => {
             const { textDelta } = chunk;
@@ -733,33 +768,46 @@ function EditorAgent({
             return [
               ...m,
               {
-                id: Date.now(),
-                role: "assistant",
+                id: nanoid(4),
+                role: "assistant" as const,
                 content: textDelta,
                 createdAt: new Date(),
                 conversation: null,
-                query: currentQuery.id,
-                toolCallId: null,
-                toolCallStatus: null,
+                query: currentQuery?.id ?? null,
+                parts: [],
               },
             ];
           });
         }
 
         if (chunk.type === "tool-call-streaming-start") {
+          const { toolName } = chunk;
+
+          if (toolName === "askForPermission") {
+            setPermissionNeeded(true);
+          }
           setMessages((m) => {
             const { toolName, toolCallId } = chunk;
             return [
               ...m,
               {
-                id: Date.now(),
-                role: "tool-call",
-                content: `${toolName}`,
-                toolCallId,
-                toolCallStatus: "pending",
+                id: nanoid(4),
+                role: "assistant",
+                content: "",
                 createdAt: new Date(),
                 conversation: null,
-                query: currentQuery.id,
+                query: currentQuery?.id ?? null,
+                parts: [
+                  {
+                    type: "tool-invocation",
+                    toolInvocation: {
+                      toolCallId,
+                      toolName,
+                      state: "partial-call",
+                      args: [],
+                    },
+                  },
+                ],
               },
             ];
           });
@@ -767,52 +815,89 @@ function EditorAgent({
 
         if (chunk.type === "tool-call") {
           const { toolCallId, toolName } = chunk;
-
+          if (toolName === "askForPermission") {
+            setPermissionNeeded(true);
+            return;
+          }
           setMessages((prevMsgs) => {
-            const toolMsg = prevMsgs.find((i) => i.toolCallId === toolCallId);
+            const toolMsgIndex = prevMsgs.findIndex((msg) =>
+              msg.parts?.find(
+                (part) =>
+                  part.type === "tool-invocation" &&
+                  part.toolInvocation.state === "partial-call" &&
+                  part.toolInvocation.toolCallId === toolCallId
+              )
+            );
 
-            if (!toolMsg) {
+            if (toolMsgIndex === -1) {
               console.warn(`Tool message with ID ${toolCallId} not found`);
               return prevMsgs;
             }
 
-            const updatedMsg: ConversationMessage = {
+            const toolMsg = prevMsgs[toolMsgIndex];
+            const updatedMsg: TomeMessage = {
               ...toolMsg,
-              toolCallStatus: "complete",
+              parts: toolMsg.parts?.map((part) => {
+                if (
+                  part.type === "tool-invocation" &&
+                  part.toolInvocation.toolCallId === toolCallId
+                ) {
+                  return {
+                    ...part,
+                    toolInvocation: {
+                      ...part.toolInvocation,
+                      state: "result",
+                      result: "",
+                    },
+                  };
+                }
+                return part;
+              }),
             };
 
-            return prevMsgs.map((msg) =>
-              msg.toolCallId === toolCallId ? updatedMsg : msg
+            return prevMsgs.map((msg, index) =>
+              index === toolMsgIndex ? updatedMsg : msg
             );
           });
-          if (currentQuery) {
-            window.messages.createMessage({
-              content: `${toolName}`,
-              query: currentQuery?.id,
-              role: "tool-call",
-              toolCallId: toolCallId,
-              toolCallStatus: "complete",
-              conversation: null,
-            });
-          }
         }
       },
-      onFinish: ({ text }) => {
+      onFinish: ({ text, toolCalls }) => {
+        const calls: ToolInvocationUIPart[] = toolCalls.map((i) => ({
+          type: "tool-invocation",
+          toolInvocation: {
+            state: "result",
+            toolCallId: i.toolCallId,
+            toolName: i.toolName,
+            args: i.args,
+            result: "",
+          },
+        }));
         if (currentQuery) {
           window.messages.createMessage({
             content: text,
             query: currentQuery?.id,
             role: "assistant",
-            toolCallId: null,
-            toolCallStatus: null,
             conversation: null,
+            parts: calls,
           });
         }
       },
     });
 
     await streamResult.consumeStream();
+  }
 
+  async function sendMessage(input: Omit<TomeMessage, "id">) {
+    setThinking(true);
+    setInput("");
+    setPermissionNeeded(false);
+    if (!currentQuery) return;
+    const msg = await window.messages.createMessage(input);
+    const newMessages: TomeMessage[] = [...messages, msg];
+    setMessages(newMessages);
+    console.log("New MEssages", newMessages);
+
+    await getAgentResponse(newMessages);
     setThinking(false);
   }
 
@@ -850,6 +935,11 @@ function EditorAgent({
           </div>
 
           <ChatInputDisplay
+            query={currentQuery ?? undefined}
+            setPermissionNeeded={setPermissionNeeded}
+            refreshResponse={getAgentResponse}
+            setMessages={setMessages}
+            permissionNeeded={permissionNeeded}
             showQueryControls
             thinking={thinking}
             messages={messages}
@@ -947,7 +1037,7 @@ function QueryTab({
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       className={cn(
-        "min-w-30 p-1 h-8 text-[0.7rem] border w-fit pl-3 pr-2 flex gap-2 justify-between items-center font-mono transition-all cursor-pointer",
+        "min-w-30 p-1 h-8 text-[0.7rem] border w-fit pl-3 pr-2 flex gap-2 justify-between items-center font-mono transition-all cursor-pointer rounded-md",
         isSelected && "bg-zinc-800/75",
         isEditing && "cursor-text"
       )}
@@ -995,7 +1085,7 @@ function QueryTabs() {
   } = useQueryData();
 
   return (
-    <div className="border-b flex overflow-x-auto min-h-8 items-center ">
+    <div className="border-b flex overflow-x-auto min-h-8 items-center p-2 gap-2">
       {queries.map((query) => (
         <QueryTab
           key={query.id}

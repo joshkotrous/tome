@@ -1,7 +1,7 @@
 import { DatabaseSchema, JsonQueryResult, TableDef } from "core/connection";
 import {
   Conversation,
-  ConversationMessage,
+  TomeMessage,
   ProxyRequestOptions,
   ProxyStreamResponse,
   Query,
@@ -48,12 +48,12 @@ interface SettingsApi {
 
 interface MessagesApi {
   createMessage: (
-    values: Omit<ConversationMessage, "id" | "createdAt">
-  ) => Promise<ConversationMessage>;
+    values: Omit<TomeMessage, "id" | "createdAt">
+  ) => Promise<TomeMessage>;
   listMessages: (
     conversation?: number,
     query?: number
-  ) => Promise<ConversationMessage[]>;
+  ) => Promise<TomeMessage[]>;
 }
 
 interface ConversationsApi {

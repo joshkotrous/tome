@@ -18,7 +18,7 @@ import Spinner from "./ui/spinner";
 import MarkdownRenderer from "./markdownRederer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import ResizableContainer from "./ui/resizableContainer";
-import { Conversation, ConversationMessage } from "@/types";
+import { Conversation, Query, TomeMessage } from "@/types";
 import { Input } from "./ui/input";
 import {
   Dialog,
@@ -35,10 +35,21 @@ import { TomeAgentModel, TomeAgentModels } from "../../core/ai";
 import { useQueryData } from "@/queryDataProvider";
 import { AIProviderLogo } from "./toolbar";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  FileUIPart,
+  ReasoningUIPart,
+  SourceUIPart,
+  StepStartUIPart,
+  TextUIPart,
+  ToolInvocationUIPart,
+} from "@ai-sdk/ui-utils";
+import { updateMessagesWithToolResult } from "./editor";
 
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  toolName: string | null;
 };
 
 export default function ChatInterface() {
@@ -62,13 +73,13 @@ export default function ChatInterface() {
   >(null);
   const [input, setInput] = useState("");
 
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [messages, setMessages] = useState<TomeMessage[]>([]);
 
   const { msgs, send, thinking } = useAgent({
     messages,
     setMessages,
   });
-  async function sendMessage(msg: ChatMessage) {
+  async function sendMessage(msg: Omit<TomeMessage, "id">) {
     let convo: number | null = selectedConversation;
     if (!selectedConversation) {
       const newConversation = await window.conversations.createConversation(
@@ -141,7 +152,13 @@ export default function ChatInterface() {
               <div
                 key={i.name}
                 onClick={() =>
-                  sendMessage({ role: "user", content: i.message })
+                  sendMessage({
+                    query: null,
+                    role: "user",
+                    content: i.message,
+                    conversation: null,
+                    parts: [],
+                  })
                 }
                 className="text-xs px-2 p-1 border rounded-full bg-zinc-900 hover:bg-zinc-800 select-none transition-all"
               >
@@ -159,7 +176,15 @@ export default function ChatInterface() {
             onModelChange={setModel}
             input={input}
             setInput={setInput}
-            onSubmit={() => sendMessage({ role: "user", content: input })}
+            onSubmit={() =>
+              sendMessage({
+                role: "user",
+                content: input,
+                conversation: selectedConversation,
+                parts: [],
+                query: null,
+              })
+            }
           />
         </div>
       )}
@@ -168,6 +193,8 @@ export default function ChatInterface() {
 }
 
 export function ChatInputDisplay({
+  setMessages,
+  permissionNeeded,
   setModel,
   model,
   input,
@@ -176,17 +203,26 @@ export function ChatInputDisplay({
   messages,
   sendMessage,
   showQueryControls = true,
+  refreshResponse,
+  setPermissionNeeded,
+  conversation,
+  query,
 }: {
-  messages: ConversationMessage[];
+  permissionNeeded?: boolean;
+  setPermissionNeeded?: React.Dispatch<SetStateAction<boolean>>;
+  refreshResponse?: (newMessages: TomeMessage[]) => Promise<void>;
+  messages: TomeMessage[];
+  setMessages?: React.Dispatch<SetStateAction<TomeMessage[]>>;
   thinking: boolean;
   setModel: React.Dispatch<SetStateAction<TomeAgentModel>>;
   model: TomeAgentModel;
   input: string;
   setInput: React.Dispatch<SetStateAction<string>>;
-  sendMessage: (val: ChatMessage) => Promise<void>;
+  sendMessage: (val: Omit<TomeMessage, "id">) => Promise<void>;
   showQueryControls: boolean;
+  query?: Query;
+  conversation?: Conversation;
 }) {
-  const { currentConnection, currentQuery } = useQueryData();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -248,22 +284,65 @@ export function ChatInputDisplay({
         {thinking && <AnimatedEllipsis size="lg" />}
       </div>
       <div className=" flex flex-col gap-2 sticky justify-center items-center w-full bottom-0 left-0 px-4">
-        <div className="max-w-2xl w-full h-fit py-4">
-          <div className="w-full flex gap-1.5">
-            {showQueryControls && (
-              <div className="flex gap-1.5 p-2 pb-4 relative top-2 z-30 bg-zinc-800/40 backdrop-blur-lg rounded-t-md">
-                {currentQuery && <QuerySwitcher />}
-                {currentConnection && <DatabaseSwitcher />}
-              </div>
-            )}
+        <div className="relative max-w-2xl w-full h-fit py-4">
+          <div className="px-4 w-full left-0">
+            <AnimatePresence>
+              {(thinking || permissionNeeded) && (
+                <motion.div
+                  initial={{ y: 40 }}
+                  animate={{ y: 0 }}
+                  exit={{ y: 40 }}
+                  transition={{ duration: 0.1 }}
+                  className="bg-zinc-900  w-full rounded-t-md border border-b-0 text-xs p-2 flex items-center justify-between"
+                >
+                  {thinking && <Thinking />}
+                  {permissionNeeded && (
+                    <div className="w-full flex items-center justify-between">
+                      Permission Required to Continue
+                      <Button
+                        onClick={() => {
+                          const newMessages = updateMessagesWithToolResult(
+                            messages,
+                            "Permission approved"
+                          );
+                          console.log("newMessages", newMessages);
+                          if (setMessages) {
+                            setMessages(newMessages);
+                          }
+                          if (refreshResponse) {
+                            refreshResponse(newMessages);
+                          }
+                          if (setPermissionNeeded) {
+                            setPermissionNeeded((prev) => !prev);
+                          }
+                        }}
+                        size="xs"
+                        className="bg-green-500/25 border-green-400 text-green-400 hover:bg-green-500/50 transition-all !p-1 !px-2 !h-fit !text-[10px]"
+                      >
+                        Run Query
+                      </Button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           <ChatInput
+            showQueryControls={showQueryControls}
             thinking={thinking}
             model={model}
             onModelChange={setModel}
             input={input}
             setInput={setInput}
-            onSubmit={() => sendMessage({ role: "user", content: input })}
+            onSubmit={() =>
+              sendMessage({
+                role: "user",
+                content: input,
+                conversation: conversation?.id ?? null,
+                parts: [{ type: "text", text: input }],
+                query: query?.id ?? null,
+              })
+            }
           />
         </div>
       </div>
@@ -522,7 +601,7 @@ function ChatInput({
   onSubmit,
   model,
   onModelChange,
-  thinking,
+  showQueryControls,
 }: {
   model: TomeAgentModel;
   onModelChange: React.Dispatch<SetStateAction<TomeAgentModel>>;
@@ -530,6 +609,7 @@ function ChatInput({
   setInput: React.Dispatch<SetStateAction<string>>;
   onSubmit: () => void;
   thinking?: boolean;
+  showQueryControls?: boolean;
 }) {
   const handleSubmit = () => {
     if (input.trim()) {
@@ -541,16 +621,22 @@ function ChatInput({
   return (
     <div className="bg-zinc-900 rounded-md border p-2 flex items-end gap-2 w-full max-w-2xl relative z-50">
       <div className="w-full flex flex-col gap-2">
+        {showQueryControls && (
+          <div className="w-full flex gap-1.5">
+            <QuerySwitcher />
+            <DatabaseSwitcher />
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
           <ModelPicker model={model} onModelChange={onModelChange} />
-          {thinking && <Thinking />}
         </div>
         <div className="flex items-end gap-2">
           <Textarea
             placeholder="Enter a message..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            className="font-medium border-none bg-zinc-900 dark:bg-input/0 h-20"
+            className="font-medium border-none bg-zinc-900 dark:bg-input/0 h-20 text-sm"
             onKeyDown={(e) => {
               // Handle Cmd+Enter only within the textarea
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -707,94 +793,60 @@ function ModelPicker({
   );
 }
 
-function parseUIAction(response: string) {
-  // Check if response is valid
-  if (!response || typeof response !== "string") {
-    return { message: "", action: null };
+function toolDisplay(
+  part:
+    | TextUIPart
+    | ReasoningUIPart
+    | ToolInvocationUIPart
+    | SourceUIPart
+    | FileUIPart
+    | StepStartUIPart
+) {
+  if (part.type !== "tool-invocation") {
+    return;
   }
 
-  // Look for the last occurrence of <ui_action> tag
-  const actionMatch = response.match(/<ui_action>(.*?)<\/ui_action>\s*$/);
+  const { state, toolName } = part.toolInvocation;
 
-  if (actionMatch) {
-    // Extract the action content
-    const action = actionMatch[1].trim();
-
-    // Remove the ui_action tag from the message
-    const message = response
-      .replace(/<ui_action>.*?<\/ui_action>\s*$/, "")
-      .trim();
-
-    return {
-      message: message.trim(),
-
-      action: action,
-    };
-  }
-
-  return {
-    message: response.trim(),
-
-    action: null,
-  };
-}
-
-function toolDisplay(message: Omit<ConversationMessage, "id">) {
-  if (message.role !== "tool-call") return;
-  if (message.content === "getSchema") {
-    if (message.toolCallStatus === "pending") {
+  if (toolName === "getSchema") {
+    if (state === "partial-call") {
       return "Getting schema...";
     }
     return "Retrieved schema";
   }
 
-  if (
-    message.content === "updateQuery" ||
-    message.content === "updateQuerySection"
-  ) {
-    if (message.toolCallStatus === "pending") {
+  if (toolName === "updateQuery") {
+    if (state === "partial-call") {
       return "Updating query...";
     }
     return "Updated query";
   }
 
-  if (message.content === "runQuery") {
-    if (message.toolCallStatus === "pending") {
+  if (toolName === "runQuery") {
+    if (state === "partial-call") {
       return "Running query...";
     }
+
     return "Ran query";
+  }
+
+  if (toolName === "askForPermission") {
+    if (state === "partial-call") {
+      return "Awaiting permission to continue...";
+    }
+
+    return "Permission received";
   }
 }
 
 function ChatMessage({
   message,
-  sendMessage,
 }: {
-  message: Omit<ConversationMessage, "id">;
-  sendMessage: (v: ChatMessage) => void;
+  message: Omit<TomeMessage, "id">;
+  sendMessage: (v: TomeMessage) => void;
 }) {
   const { thinking } = useAgent();
   const fromUser = message.role === "user";
-
-  const { message: cleanedMessage, action } = useMemo(() => {
-    return parseUIAction(message.content);
-  }, [message.content]);
-
-  if (message.role === "tool-call") {
-    return (
-      <div className="border p-2 rounded-sm bg-zinc-900/75">
-        <div className="flex gap-1.5 items-center text-xs text-zinc-400">
-          {message.toolCallStatus === "pending" && (
-            <Spinner className="size-3.5" />
-          )}
-          {message.toolCallStatus === "complete" && (
-            <Check className="size-3.5 text-green-500" />
-          )}
-          {toolDisplay(message)}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -803,53 +855,49 @@ function ChatMessage({
         fromUser ? "items-end py-4" : "items-start"
       )}
     >
-      <span
-        className={cn(
-          "pb-2 w-full flex text-xs text-zinc-400 capitalize",
-          fromUser && "justify-end "
-        )}
-      >
-        {message.role}
-      </span>
-      <div
-        className={cn(
-          "rounded-lg px-4 py-3 whitespace-pre-wrap break-words",
-          fromUser ? "bg-zinc-600 text-white" : "bg-zinc-800 text-zinc-100"
-        )}
-      >
-        <MarkdownRenderer content={cleanedMessage} />
-        {thinking && (
-          <div className="flex gap-1.5 items-center">
-            <Spinner /> Thinking...
+      {message.role === "assistant" &&
+        message.parts
+          .filter((i) => i.type === "tool-invocation")
+          .map((k) => (
+            <div className="border p-2 rounded-sm bg-zinc-900/75 w-fit my-1">
+              <div className="flex gap-1.5 items-center text-xs text-zinc-400">
+                {k.toolInvocation.state === "partial-call" && (
+                  <Spinner className="size-3.5" />
+                )}
+                {k.toolInvocation.state === "result" && (
+                  <Check className="size-3.5 text-green-500" />
+                )}
+                {toolDisplay(k)}
+              </div>
+            </div>
+          ))}
+
+      {message.content.trim() !== "" && (
+        <>
+          <span
+            className={cn(
+              "pb-2 w-full flex text-xs text-zinc-400 capitalize",
+              fromUser && "justify-end "
+            )}
+          >
+            {message.role}
+          </span>
+          <div
+            className={cn(
+              "rounded-lg px-4 py-3 whitespace-pre-wrap break-words",
+              fromUser ? "bg-zinc-600 text-white" : "bg-zinc-800 text-zinc-100"
+            )}
+          >
+            <MarkdownRenderer content={message.content} />
+
+            {thinking && (
+              <div className="flex gap-1.5 items-center">
+                <Spinner /> Thinking...
+              </div>
+            )}
           </div>
-        )}
-        <UIAction sendMessage={sendMessage} action={action} />
-      </div>
+        </>
+      )}
     </div>
   );
-}
-
-function UIAction({
-  action,
-  sendMessage,
-}: {
-  action: string | null;
-  sendMessage: (v: ChatMessage) => void;
-}) {
-  if (action === "approve-query") {
-    return (
-      <div className="py-2 w-full flex justify-end">
-        <Button
-          className="bg-green-700/50 hover:bg-green-700/25 border border-green-500 text-green-400"
-          onClick={() =>
-            sendMessage({ role: "user", content: "Run the query" })
-          }
-        >
-          Run Query
-        </Button>
-      </div>
-    );
-  }
-
-  return null;
 }

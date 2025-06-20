@@ -1,10 +1,4 @@
-import {
-  Check,
-  Database as DatabaseIcon,
-  Loader2,
-  Settings,
-  X,
-} from "lucide-react";
+import { Check, Database as DatabaseIcon, Loader2, X } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -360,8 +354,6 @@ export function ConnectionDetailsForm({
     | React.Dispatch<SetStateAction<Omit<Connection, "id">>>
     | React.Dispatch<SetStateAction<Connection>>;
 }) {
-  const [selectedPage, setSelectedPage] = useState<string>("Connection");
-
   function getForm() {
     switch (values.engine) {
       case "Postgres":
@@ -373,65 +365,10 @@ export function ConnectionDetailsForm({
     }
   }
 
-  function displayPage() {
-    switch (selectedPage) {
-      case "Connection":
-        return getForm();
-      case "Advanced":
-        return (
-          <AdvancedConnectionSettingsForm values={values} onChange={onChange} />
-        );
-    }
-  }
-
-  const pageOptions = [
-    {
-      title: "Connection",
-      icon: DatabaseIcon,
-    },
-    { title: "Advanced", icon: Settings },
-  ];
-
   return (
-    <div className="flex w-full gap-2">
-      {" "}
-      <div className="w-48">
-        <div className="flex size-full gap-4">
-          <div className="h-full  flex flex-col w-36 items-end border-r pr-2 gap-2">
-            {pageOptions.map((i) => (
-              <Button
-                key={i.title}
-                size="sm"
-                variant="ghost"
-                onClick={() => setSelectedPage(i.title)}
-                className={cn(
-                  `w-full flex gap-1.5 items-center justify-end`,
-                  i.title === selectedPage && "bg-zinc-800"
-                )}
-              >
-                <i.icon className="size-4" /> {i.title}
-              </Button>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="w-full">{displayPage()}</div>
-    </div>
-  );
-}
+    <div className="w-full space-y-4">
+      {getForm()}
 
-function AdvancedConnectionSettingsForm({
-  values,
-  onChange,
-}: {
-  values: Omit<Connection, "id"> | Connection;
-  onChange:
-    | React.Dispatch<SetStateAction<Omit<Connection, "id">>>
-    | React.Dispatch<SetStateAction<Connection>>;
-}) {
-  return (
-    <div className="size-full min-h-72 space-y-3">
-      <h2 className="font-semibold">Advanced</h2>
       <div className="bg-zinc-800 w-full rounded-md p-4 space-y-1">
         <div className="flex justify-between">
           <h3 className="text-sm font-semibold">

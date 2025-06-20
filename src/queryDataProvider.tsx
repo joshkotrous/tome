@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 import { JsonQueryResult } from "core/connections";
-import { ConversationMessage, Connection, Query } from "./types";
+import { TomeMessage, Connection, Query } from "./types";
 
 interface QueryDataContextValue {
   connections: Connection[];
@@ -19,7 +19,7 @@ interface QueryDataContextValue {
   loadingQuery: boolean;
   error: string | null;
   refreshQuery: () => Promise<void>;
-  queryMessages: ConversationMessage[];
+  queryMessages: TomeMessage[];
   runQuery: (
     connection: Connection,
     query: string
@@ -52,7 +52,7 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
   const [queries, setQueries] = useState<Query[]>([]);
   const [loadingQuery, setLoadingQuery] = useState(false);
   const [queryResult, setQueryResult] = useState<JsonQueryResult | null>(null);
-  const [queryMessages, setQueryMessages] = useState<ConversationMessage[]>([]);
+  const [queryMessages, setQueryMessages] = useState<TomeMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loadingDb, setLoadingDb] = useState(false);
 
