@@ -4,6 +4,9 @@ import {
   StreamTextResult,
   Tool,
   GenerateTextResult,
+  StreamTextOnChunkCallback,
+  StreamTextOnFinishCallback,
+  ToolChoice,
 } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
@@ -18,10 +21,9 @@ export const TomeOAIAgentModelObject = z.enum([
   "gpt-4.5",
   "gpt-4.1",
   "o3",
+  "o3-mini",
   "o4",
 ]);
-
-export type TomeOAIAgentModel = z.infer<typeof TomeOAIAgentModelObject>;
 
 export const TomeAnthropicAgentModelObject = z.enum([
   "claude-opus-4",
@@ -30,24 +32,94 @@ export const TomeAnthropicAgentModelObject = z.enum([
   "claude-sonnet-3.5",
 ]);
 
+const ModelObject = z.object({
+  provider: z.enum(["Open AI", "Anthropic"]),
+  name: z.union([TomeOAIAgentModelObject, TomeAnthropicAgentModelObject]),
+});
+
+export const TomeAgentModels: z.infer<typeof ModelObject>[] = [
+  // Anthropic Models
+  {
+    name: "claude-opus-4",
+    provider: "Anthropic",
+  },
+  {
+    name: "claude-sonnet-4",
+    provider: "Anthropic",
+  },
+  {
+    name: "claude-sonnet-3.7",
+    provider: "Anthropic",
+  },
+  {
+    name: "claude-sonnet-3.5",
+    provider: "Anthropic",
+  },
+
+  // OpenAI Models
+  {
+    name: "gpt-4o",
+    provider: "Open AI",
+  },
+  {
+    name: "gpt-4-turbo",
+    provider: "Open AI",
+  },
+  {
+    name: "gpt-4",
+    provider: "Open AI",
+  },
+  {
+    name: "gpt-4.5",
+    provider: "Open AI",
+  },
+  {
+    name: "gpt-4.1",
+    provider: "Open AI",
+  },
+  {
+    name: "o3",
+    provider: "Open AI",
+  },
+  {
+    name: "o3-mini",
+    provider: "Open AI",
+  },
+  {
+    name: "o4",
+    provider: "Open AI",
+  },
+];
+
+export type TomeOAIAgentModel = z.infer<typeof TomeOAIAgentModelObject>;
 export type TomeAnthropicAgentModel = z.infer<
   typeof TomeAnthropicAgentModelObject
 >;
 
-export type TomeAgentModel = TomeAnthropicAgentModel | TomeOAIAgentModel;
+export type TomeAgentModelOption = TomeOAIAgentModel | TomeAnthropicAgentModel;
+
+export type TomeAgentModel = z.infer<typeof ModelObject>;
 
 export type ToolMap = Record<string, Tool<any, any>>;
 
-export function streamResponse(opts: {
+export interface StreamResponseOptions {
+  toolCallStreaming?: boolean;
   prompt?: string;
   system?: string;
   tools?: ToolMap;
   apiKey: string;
   provider: AIProvider;
-  model: TomeAgentModel;
+  model: TomeAgentModelOption;
   messages?: Omit<Message, "id">[];
   maxSteps?: number;
-}): StreamTextResult<ToolMap, never> {
+  onChunk?: StreamTextOnChunkCallback<ToolMap>;
+  onFinish?: StreamTextOnFinishCallback<ToolMap>;
+  toolChoice?: ToolChoice<ToolMap>;
+}
+
+export function streamResponse(
+  opts: StreamResponseOptions
+): StreamTextResult<ToolMap, never> {
   const { prompt, tools = {} } = opts;
   switch (opts.provider) {
     case "Open AI":
@@ -58,7 +130,10 @@ export function streamResponse(opts: {
         opts.messages,
         prompt,
         opts.model as TomeOAIAgentModel,
-        opts.maxSteps
+        opts.maxSteps,
+        opts.toolCallStreaming,
+        opts.onChunk,
+        opts.onFinish
       );
     case "Anthropic":
       return streamAnthropic(
@@ -68,7 +143,10 @@ export function streamResponse(opts: {
         opts.messages,
         prompt,
         opts.model as TomeAnthropicAgentModel,
-        opts.maxSteps
+        opts.maxSteps,
+        opts.toolCallStreaming,
+        opts.onChunk,
+        opts.onFinish
       );
     default:
       throw new Error(`Unsupported provider: ${opts.provider}`);
@@ -82,7 +160,11 @@ function streamOpenAI(
   messages?: Omit<Message, "id">[],
   prompt?: string,
   model: TomeOAIAgentModel = "gpt-4o",
-  maxSteps = 10
+  maxSteps = 10,
+  toolCallStreaming?: boolean,
+  onChunk?: StreamTextOnChunkCallback<ToolMap>,
+  onFinish?: StreamTextOnFinishCallback<ToolMap>,
+  toolChoice?: ToolChoice<ToolMap>
 ): StreamTextResult<ToolMap, never> {
   const openai = createOpenAI({ apiKey });
   return streamText({
@@ -92,6 +174,10 @@ function streamOpenAI(
     tools,
     messages,
     maxSteps,
+    toolCallStreaming,
+    onChunk,
+    onFinish,
+    toolChoice,
   });
 }
 
@@ -102,7 +188,11 @@ function streamAnthropic(
   messages?: Omit<Message, "id">[],
   prompt?: string,
   model: TomeAnthropicAgentModel = "claude-sonnet-4",
-  maxSteps = 10
+  maxSteps = 10,
+  toolCallStreaming?: boolean,
+  onChunk?: StreamTextOnChunkCallback<ToolMap>,
+  onFinish?: StreamTextOnFinishCallback<ToolMap>,
+  toolChoice?: ToolChoice<ToolMap>
 ): StreamTextResult<ToolMap, never> {
   function getAnthropicModel(model: TomeAnthropicAgentModel) {
     switch (model) {
@@ -126,6 +216,10 @@ function streamAnthropic(
     tools,
     messages,
     maxSteps,
+    toolCallStreaming,
+    onChunk,
+    onFinish,
+    toolChoice,
   });
 }
 

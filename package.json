@@ -8,12 +8,16 @@
   "description": "AI Native Database client",
   "build": {
     "artifactName": "tome-${os}-${arch}.${ext}",
-    "asarUnpack": ["**/*.node", "public/**", "node_modules/keytar/**","node_modules/pg/**"
-  ],
+    "asarUnpack": [
+      "**/*.node",
+      "public/**",
+      "node_modules/keytar/**",
+      "node_modules/pg/**"
+    ],
     "extraResources": [
       {
-        "from": "db/migrations",  
-        "to":   "db/migrations"
+        "from": "db/migrations",
+        "to": "db/migrations"
       }
     ],
     "appId": "com.joshkotrous.tome",
@@ -83,8 +87,7 @@
     "dist:mac:arm": "electron-builder --mac --arm64 --publish=never",
     "dist:mac:x64": "electron-builder --mac --x64 --publish=never",
     "prebuild": "npm-run-all clean build:renderer build:main",
-    "preview": "vite preview",
-    "postinstall": "electron-builder install-app-deps"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",
@@ -100,11 +103,13 @@
     "@radix-ui/react-switch": "^1.2.5",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tailwindcss/vite": "^4.1.8",
+    "@tanstack/react-virtual": "^3.13.10",
     "ai": "^4.3.16",
     "better-sqlite3": "^11.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "diff": "^8.0.2",
     "drizzle-kit": "^0.31.1",
     "drizzle-orm": "^0.44.1",
     "electron-log": "^5.4.0",

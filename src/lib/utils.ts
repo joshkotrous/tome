@@ -34,3 +34,10 @@ export function displayDate(date: Date) {
     year: "numeric",
   });
 }
+
+export function parseBool(str: string | null) {
+  if (str?.toLowerCase().trim() === "true") {
+    return true;
+  }
+  return false;
+}

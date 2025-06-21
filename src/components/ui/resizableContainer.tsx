@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 interface ResizableContainerProps {
   children: React.ReactNode;
   direction?: "horizontal" | "vertical";
+  side?: "left" | "right" | "top" | "bottom"; // New prop for positioning
   defaultSize?: number;
   minSize?: number;
   maxSize?: number;
@@ -18,6 +19,7 @@ interface ResizableContainerProps {
 export default function ResizableContainer({
   children,
   direction = "horizontal",
+  side = "right", // Default to right side
   defaultSize = 224,
   minSize = 160,
   maxSize = 400,
@@ -31,7 +33,6 @@ export default function ResizableContainer({
   const [size, setSize] = useState(defaultSize);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
   const effectiveSnapThreshold = snapThreshold ?? minSize;
   const isHorizontal = direction === "horizontal";
 
@@ -70,13 +71,29 @@ export default function ResizableContainer({
       if (!containerRef.current) return;
 
       const rect = containerRef.current.getBoundingClientRect();
-      const newSize = isHorizontal
-        ? e.clientX - rect.left
-        : rect.bottom - e.clientY;
+      let newSize: number;
+
+      if (isHorizontal) {
+        if (side === "left") {
+          // For left side, size increases as we move away from the left edge
+          newSize = rect.right - e.clientX;
+        } else {
+          // For right side, size increases as we move away from the right edge
+          newSize = e.clientX - rect.left;
+        }
+      } else {
+        if (side === "top") {
+          // For top side, size increases as we move down from the top
+          newSize = rect.bottom - e.clientY;
+        } else {
+          // For bottom side, size increases as we move up from the bottom
+          newSize = e.clientY - rect.top;
+        }
+      }
 
       updateSize(newSize);
     },
-    [isHorizontal, updateSize]
+    [isHorizontal, side, updateSize]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -120,16 +137,42 @@ export default function ResizableContainer({
     ? { width: `${size}px` }
     : { height: `${size}px` };
 
-  // Calculate resize handle classes
-  const resizeHandleClasses = isHorizontal
-    ? cn(
-        "absolute top-0 right-0 w-2 h-full cursor-col-resize hover:bg-zinc-600/50 transition-colors duration-150 z-20",
-        isDragging && "bg-zinc-500/70"
-      )
-    : cn(
-        "absolute top-0 left-0 w-full h-2 cursor-row-resize hover:bg-zinc-600/50 transition-colors duration-150 z-20",
-        isDragging && "bg-zinc-500/70"
-      );
+  // Calculate resize handle classes based on side
+  const getResizeHandleClasses = () => {
+    const baseClasses =
+      "absolute cursor-pointer hover:bg-zinc-600/50 transition-colors duration-150 z-20";
+    const activeClasses = isDragging ? "bg-zinc-500/70" : "";
+
+    if (isHorizontal) {
+      if (side === "left") {
+        return cn(
+          baseClasses,
+          "top-0 left-0 w-2 h-full cursor-col-resize",
+          activeClasses
+        );
+      } else {
+        return cn(
+          baseClasses,
+          "top-0 right-0 w-2 h-full cursor-col-resize",
+          activeClasses
+        );
+      }
+    } else {
+      if (side === "top") {
+        return cn(
+          baseClasses,
+          "top-0 left-0 w-full h-2 cursor-row-resize",
+          activeClasses
+        );
+      } else {
+        return cn(
+          baseClasses,
+          "bottom-0 left-0 w-full h-2 cursor-row-resize",
+          activeClasses
+        );
+      }
+    }
+  };
 
   return (
     <div
@@ -144,7 +187,10 @@ export default function ResizableContainer({
       {children}
       {/* Resize handle */}
       {!isCollapsed && (
-        <div className={resizeHandleClasses} onMouseDown={handleMouseDown} />
+        <div
+          className={getResizeHandleClasses()}
+          onMouseDown={handleMouseDown}
+        />
       )}
     </div>
   );

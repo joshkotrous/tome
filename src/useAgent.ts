@@ -1,26 +1,24 @@
 // useAgent.ts --------------------------------------------------------------
 import { useRef, useState, useCallback, Dispatch, SetStateAction } from "react";
 import { tool } from "ai";
-import { useDB } from "./databaseConnectionProvider";
 import { streamResponse, TomeAgentModel, ToolMap } from "../core/ai";
 import { z } from "zod";
 import { useAppData } from "./applicationDataProvider";
 import { useQueryData } from "./queryDataProvider";
-import { nanoid } from "nanoid";
-import { ConversationMessage } from "./types";
+import { TomeMessage } from "./types";
 
 interface UseAgentOptions {
-  messages?: ConversationMessage[];
-  setMessages?: Dispatch<SetStateAction<ConversationMessage[]>>;
+  messages?: TomeMessage[];
+  setMessages?: Dispatch<SetStateAction<TomeMessage[]>>;
 }
 
 export function useAgent(options: UseAgentOptions = {}) {
-  const { connect, connected } = useDB();
+  const { connect, connected } = useQueryData();
   const { runQuery } = useQueryData();
   const { settings, databases } = useAppData();
 
   // Use external state if provided, otherwise use internal state
-  const [internalMsgs, setInternalMsgs] = useState<ConversationMessage[]>([]);
+  const [internalMsgs, setInternalMsgs] = useState<TomeMessage[]>([]);
   const msgs = options.messages ?? internalMsgs;
   const setMsgs = options.setMessages ?? setInternalMsgs;
 
@@ -47,7 +45,7 @@ export function useAgent(options: UseAgentOptions = {}) {
 
   async function getFullSchema(connectionName: string, connectionId: number) {
     const conn = await getConnection(connectionName, connectionId);
-    const schema = await window.db.getFullSchema(conn);
+    const schema = await window.connections.getConnectionSchema(conn.id);
     return schema;
   }
 
@@ -57,7 +55,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     query: string
   ) {
     const conn = await getConnection(connectionName, connectionId);
-    const res = await runQuery({ id: nanoid(4), connection: conn, query });
+    const res = await runQuery(conn, query);
     return res && "error" in res
       ? res
       : { totalCount: res?.rowCount, records: res?.rows.splice(0, 5) ?? [] };
@@ -97,12 +95,11 @@ export function useAgent(options: UseAgentOptions = {}) {
         console.warn("Could not get settings");
         return;
       }
-      if (!settings.aiFeatures.apiKey) {
+      if (
+        !settings.aiFeatures.providers.openai.apiKey &&
+        !settings.aiFeatures.providers.anthropic.apiKey
+      ) {
         console.warn("API Key is not configured");
-        return;
-      }
-      if (!settings.aiFeatures.provider) {
-        console.warn("Provider is not configured");
         return;
       }
 
@@ -121,6 +118,9 @@ export function useAgent(options: UseAgentOptions = {}) {
           createdAt: new Date(),
           conversation,
           id: 1,
+          toolCallId: null,
+          toolCallStatus: null,
+          query: null,
         },
       ];
       setMsgs(updatedMessages);
@@ -130,6 +130,9 @@ export function useAgent(options: UseAgentOptions = {}) {
           content: text,
           role: "user",
           conversation,
+          query: null,
+          toolCallId: null,
+          toolCallStatus: null,
         });
       }
 
@@ -164,88 +167,102 @@ export function useAgent(options: UseAgentOptions = {}) {
       `;
 
       const streamResult = streamResponse({
-        model,
+        model: model.name,
         tools,
-        messages: updatedMessages,
+        messages: updatedMessages
+          .filter((i) => i.role !== "tool-call")
+          .map((k) => ({
+            ...k,
+            role: k.role as "user" | "assistant",
+          })),
         system: systemPrompt,
-        apiKey: settings.aiFeatures.apiKey,
-        provider: settings.aiFeatures.provider,
+        apiKey: settings.aiFeatures.providers.openai.apiKey,
+        provider: "Open AI",
+        toolCallStreaming: true,
+        onChunk: ({ chunk }) => {
+          console.log(chunk);
+          if (chunk.type === "text-delta") {
+            setMsgs((m) => {
+              const { textDelta } = chunk;
+              const last = m[m.length - 1];
+              // Check if we should append to existing assistant message
+              if (last?.role === "assistant" && !(last as any).toolTag) {
+                return [
+                  ...m.slice(0, -1),
+                  { ...last, content: last.content + textDelta },
+                ];
+              }
+              return [
+                ...m,
+                {
+                  id: Date.now(),
+                  role: "assistant",
+                  content: textDelta,
+                  createdAt: new Date(),
+                  conversation,
+                  query: null,
+                  toolCallId: null,
+                  toolCallStatus: null,
+                },
+              ];
+            });
+          }
+
+          if (chunk.type === "tool-call-streaming-start") {
+            setMsgs((m) => {
+              const { toolName, toolCallId } = chunk;
+              return [
+                ...m,
+                {
+                  id: Date.now(),
+                  role: "tool-call",
+                  content: toolName,
+                  toolCallId,
+                  toolCallStatus: "pending",
+                  createdAt: new Date(),
+                  conversation,
+                  query: null,
+                },
+              ];
+            });
+          }
+
+          if (chunk.type === "tool-call") {
+            const { toolCallId } = chunk;
+
+            setMsgs((prevMsgs) => {
+              const toolMsg = prevMsgs.find((i) => i.toolCallId === toolCallId);
+
+              if (!toolMsg) {
+                console.warn(`Tool message with ID ${toolCallId} not found`);
+                return prevMsgs;
+              }
+
+              const updatedMsg: TomeMessage = {
+                ...toolMsg,
+                toolCallStatus: "complete",
+              };
+
+              return prevMsgs.map((msg) =>
+                msg.toolCallId === toolCallId ? updatedMsg : msg
+              );
+            });
+          }
+        },
+        onFinish: ({ text }) => {
+          if (conversation) {
+            window.messages.createMessage({
+              content: text,
+              role: "assistant",
+              conversation,
+              query: null,
+              toolCallId: null,
+              toolCallStatus: null,
+            });
+          }
+        },
       });
-
-      // Handle text streaming
-      for await (const textPart of streamResult.textStream) {
-        setMsgs((m) => {
-          const last = m[m.length - 1];
-          // append or start new chunk
-          if (last?.role === "assistant" && !(last as any).toolTag) {
-            return [
-              ...m.slice(0, -1),
-              { ...last, content: last.content + textPart },
-            ];
-          }
-          return [
-            ...m,
-            {
-              id: 1,
-              role: "assistant",
-              content: textPart,
-              createdAt: new Date(),
-              conversation,
-            },
-          ];
-        });
-      }
-
-      // Get the final result to access tool calls and results
-      const finalResult = await streamResult;
-      const finalText = await streamResult.text;
-
-      if (conversation) {
-        window.messages.createMessage({
-          content: finalText,
-          role: "assistant",
-          conversation,
-        });
-      }
-
-      // Get tool calls and results
-      const toolCalls = await finalResult.toolCalls;
-      const toolResults = await finalResult.toolResults;
-
-      // If there were tool calls, add them to the conversation
-      if (toolCalls && toolCalls.length > 0) {
-        for (let i = 0; i < toolCalls.length; i++) {
-          const toolCall = toolCalls[i];
-          const toolResult = toolResults?.[i];
-
-          // Add tool call
-          setMsgs((m) => [
-            ...m,
-            {
-              role: "assistant",
-              content: `🛠 Called ${toolCall.toolName}`,
-              conversation,
-              createdAt: new Date(),
-              id: 1,
-            },
-          ]);
-
-          // Add tool result if available
-          if (toolResult) {
-            setMsgs((m) => [
-              ...m,
-              {
-                role: "assistant",
-                content: JSON.stringify(toolResult),
-                id: 1,
-                conversation,
-                createdAt: new Date(),
-              },
-            ]);
-          }
-        }
-      }
-
+      await streamResult.consumeStream();
       setThinking(false);
     },
     [msgs, setMsgs, settings, databases]

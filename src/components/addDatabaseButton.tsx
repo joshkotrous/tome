@@ -14,6 +14,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import {
   Connection,
+  ConnectionConfig,
   Database,
   DatabaseEngine,
   DatabaseEngineObject,
@@ -22,6 +23,8 @@ import PostgresLogo from "./logos/postgres";
 import { useAppData } from "@/applicationDataProvider";
 import { MySQLLogo } from "./logos/mysql";
 import SQLiteLogo from "./logos/sqlite";
+import { Switch } from "./ui/switch";
+import { Textarea } from "./ui/textarea";
 
 export default function AddDatabaseButton({
   size = "xs",
@@ -68,7 +71,7 @@ export function AddDatabaseDialog({
 export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
   const { refreshDatabases } = useAppData();
   const [step, setStep] = useState<AddDatabaseStep>("engine");
-  const [database, setDatabase] = useState<Omit<Database, "id">>({
+  const [database, setDatabase] = useState<Omit<Connection, "id">>({
     connection: {
       database: "",
       host: "",
@@ -81,6 +84,9 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
     engine: "Postgres",
     name: "",
     createdAt: new Date(),
+    settings: {
+      autoUpdateSemanticIndex: false,
+    },
   });
 
   const [loading, setLoading] = useState(false);
@@ -121,9 +127,9 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
     }
   }
 
-  async function saveDatabase(database: Omit<Database, "id">) {
+  async function saveDatabase(database: Omit<Connection, "id">) {
     setLoading(true);
-    await window.db.createDatabase(database);
+    await window.connections.createConnection(database);
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
     setLoading(false);
     if (onComplete) {
@@ -148,6 +154,9 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
         engine: "Postgres",
         name: "",
         createdAt: new Date(),
+        settings: {
+          autoUpdateSemanticIndex: false,
+        },
       });
     }
   }, [open]);
@@ -195,7 +204,7 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
 export function TestConnectionButton({
   database,
 }: {
-  database: Omit<Database, "id">;
+  database: Omit<Connection, "id">;
 }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{
@@ -205,10 +214,10 @@ export function TestConnectionButton({
 
   const [open, setOpen] = useState(false);
 
-  async function testConnection(db: Omit<Database, "id">) {
+  async function testConnection(db: Omit<Connection, "id">) {
     setLoading(true);
     try {
-      const success = await window.db.testConnection(db);
+      const success = await window.connections.testConnection(db);
       await new Promise<void>((resolve) => setTimeout(resolve, 200));
 
       setStatus({
@@ -286,6 +295,17 @@ export function TestConnectionButton({
   );
 }
 
+export function getEngineLogo(engine: DatabaseEngine) {
+  switch (engine) {
+    case "Postgres":
+      return <PostgresLogo className="size-20" />;
+    case "MySQL":
+      return <MySQLLogo className="size-30" />;
+    case "SQLite":
+      return <SQLiteLogo className="size-20" />;
+  }
+}
+
 function SelectDatabaseEngine({
   engine,
   setEngine,
@@ -293,17 +313,6 @@ function SelectDatabaseEngine({
   engine: DatabaseEngine;
   setEngine: (v: DatabaseEngine) => void;
 }) {
-  function getEngineLogo(engine: DatabaseEngine) {
-    switch (engine) {
-      case "Postgres":
-        return <PostgresLogo className="size-20" />;
-      case "MySQL":
-        return <MySQLLogo className="size-30" />;
-      case "SQLite":
-        return <SQLiteLogo className="size-20" />;
-    }
-  }
-
   return (
     <div className="space-y-3 w-fit mx-auto">
       <div className="space-y-1">
@@ -340,29 +349,61 @@ export function ConnectionDetailsForm({
   values,
   onChange,
 }: {
-  values: Omit<Database, "id"> | Database;
+  values: Omit<Connection, "id"> | Connection;
   onChange:
-    | React.Dispatch<SetStateAction<Omit<Database, "id">>>
-    | React.Dispatch<SetStateAction<Database>>;
+    | React.Dispatch<SetStateAction<Omit<Connection, "id">>>
+    | React.Dispatch<SetStateAction<Connection>>;
 }) {
-  switch (values.engine) {
-    case "Postgres":
-      return <GeneralConnectionForm values={values} onChange={onChange} />;
-    case "MySQL":
-      return <></>;
-    case "SQLite":
-      return <></>;
+  function getForm() {
+    switch (values.engine) {
+      case "Postgres":
+        return <GeneralConnectionForm values={values} onChange={onChange} />;
+      case "MySQL":
+        return <></>;
+      case "SQLite":
+        return <></>;
+    }
   }
+
+  return (
+    <div className="w-full space-y-4">
+      {getForm()}
+
+      <div className="bg-zinc-800 w-full rounded-md p-4 space-y-1">
+        <div className="flex justify-between">
+          <h3 className="text-sm font-semibold">
+            Automatically Update Semantic Index
+          </h3>
+          <Switch
+            checked={values.settings?.autoUpdateSemanticIndex}
+            onCheckedChange={(checked) =>
+              onChange((prev: any) => ({
+                ...prev,
+                settings: {
+                  ...prev.settings,
+                  autoUpdateSemanticIndex: checked,
+                },
+              }))
+            }
+          />
+        </div>
+        <div className="text-xs text-zinc-400">
+          Automatically create and update the semantic index for Tome to use as
+          context
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function GeneralConnectionForm({
   values,
   onChange,
 }: {
-  values: Omit<Database, "id"> | Database;
+  values: Omit<Connection, "id"> | Connection;
   onChange:
-    | React.Dispatch<SetStateAction<Omit<Database, "id">>>
-    | React.Dispatch<SetStateAction<Database>>;
+    | React.Dispatch<SetStateAction<Omit<Connection, "id">>>
+    | React.Dispatch<SetStateAction<Connection>>;
 }) {
   const handleTopLevelChange = (
     field: keyof Omit<Database, "connection" | "engine">,
@@ -375,7 +416,7 @@ export function GeneralConnectionForm({
   };
 
   const handleConnectionChange = (
-    field: keyof Connection,
+    field: keyof ConnectionConfig,
     value: string | number | boolean
   ) => {
     onChange((prev: any) => ({
@@ -406,9 +447,10 @@ export function GeneralConnectionForm({
 
         <div className="space-y-2 col-span-2">
           <Label htmlFor="description">Description</Label>
-          <Input
+          <Textarea
             value={values.description ?? ""}
             id="description"
+            className="h-20 text-sm"
             placeholder="Optional notes or environment context"
             onChange={(e) =>
               handleTopLevelChange("description", e.target.value)
