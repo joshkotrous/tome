@@ -27,8 +27,8 @@ function QueryToolbar() {
   return (
     <div className="w-full flex justify-between items-center p-1.5 border-b border-zinc-800 flex-shrink-0">
       <div className="text-sm flex gap-1.5 items-center">
-        <Button size="xs" className="">
-          <FileOutput className="size-4" /> Export
+        <Button size="xs" className="bg-zinc-950/50">
+          <FileOutput className="size-3" /> Export
         </Button>
       </div>
     </div>
@@ -100,7 +100,7 @@ export function QueryResultTable({
             {result.columns.map((c) => (
               <div
                 key={c}
-                className="w-32 px-3 py-1 text-left flex items-center font-semibold whitespace-nowrap flex-shrink-0 text-xs border-zinc-700 border-r"
+                className="w-32 px-3 py-1 text-left flex items-center font-semibold whitespace-nowrap flex-shrink-0 text-xs border-zinc-700 border-r text-nowrap overflow-hidden"
               >
                 {c}
               </div>
@@ -143,7 +143,7 @@ export function QueryResultTable({
                   {result.columns.map((c) => (
                     <div
                       key={c}
-                      className="px-3 py-1 overflow-hidden text-ellipsis flex-shrink-0 text-xs border-r border-zinc-700"
+                      className="px-3 py-1 overflow-hidden  text-ellipsis flex-shrink-0 text-xs border-r border-zinc-700"
                       style={{ width: "128px" }}
                     >
                       {formatCell(row[c])}

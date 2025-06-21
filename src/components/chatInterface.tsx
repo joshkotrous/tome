@@ -44,7 +44,7 @@ import {
   TextUIPart,
   ToolInvocationUIPart,
 } from "@ai-sdk/ui-utils";
-import { updateMessagesWithToolResult } from "./editor";
+import { updateMessagesWithToolResult } from "@/agent/useAgent";
 
 type ChatMessage = {
   role: "user" | "assistant";
