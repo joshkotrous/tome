@@ -295,7 +295,7 @@ export function useAgent({
           }
           window.messages.createMessage({
             content: "",
-            conversation: null,
+            conversation: conversation ?? null,
             query: currentQuery?.id ?? null,
             parts: [
               {
@@ -364,15 +364,13 @@ export function useAgent({
             result: "",
           },
         }));
-        if (currentQuery) {
-          window.messages.createMessage({
-            content: text,
-            query: currentQuery?.id,
-            role: "assistant",
-            conversation: conversation ?? null,
-            parts: calls,
-          });
-        }
+        window.messages.createMessage({
+          content: text,
+          query: currentQuery?.id ?? null,
+          role: "assistant",
+          conversation: conversation ?? null,
+          parts: calls,
+        });
       },
     });
 
