@@ -1,4 +1,5 @@
 import { Tool, tool } from "ai";
+import { ToolMap } from "core/ai";
 import { SetStateAction } from "react";
 import { z } from "zod";
 
@@ -25,7 +26,7 @@ export function getAgentTools({
     query: string
   ) => any;
   getSchemaFn: (connectionName: string, connectionId: number) => any;
-}) {
+}): ToolMap {
   let updateQuery: Tool<any, any> | undefined = undefined;
   let updateQuerySection: Tool<any, any> | undefined = undefined;
 
@@ -197,9 +198,17 @@ export function getAgentTools({
     parameters: z.object({}),
   });
 
+  if (updateQuery && updateQuerySection) {
+    return {
+      updateQuery,
+      updateQuerySection,
+      runQuery,
+      getSchema,
+      askForPermission,
+    };
+  }
+
   return {
-    updateQuery,
-    updateQuerySection,
     runQuery,
     getSchema,
     askForPermission,

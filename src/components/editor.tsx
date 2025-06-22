@@ -399,6 +399,8 @@ function EditorAgent({
     permissionNeeded,
     setPermissionNeeded,
   } = useAgent({
+    currentConnection: currentConnection ?? undefined,
+    currentQuery: currentQuery ?? undefined,
     initialMessages: queryMessages,
     mode: "editor",
     model,

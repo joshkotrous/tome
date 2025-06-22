@@ -1,5 +1,5 @@
 import { useAppData } from "@/applicationDataProvider";
-import { ConnectionSchema, TomeMessage } from "@/types";
+import { Connection, ConnectionSchema, Query, TomeMessage } from "@/types";
 import { streamResponse, TomeAgentModel } from "../../core/ai";
 import React, { SetStateAction, useState, useEffect } from "react";
 import { getAgentTools } from "./tools";
@@ -90,6 +90,8 @@ interface UseAgentOptions {
   schema?: ConnectionSchema;
   query?: string;
   setQuery?: React.Dispatch<SetStateAction<string>>;
+  currentConnection?: Connection;
+  currentQuery?: Query;
 }
 
 export function useAgent({
@@ -99,10 +101,11 @@ export function useAgent({
   query,
   schema,
   setQuery,
+  currentConnection,
+  currentQuery,
 }: UseAgentOptions) {
   const { settings } = useAppData();
-  const { currentQuery, currentConnection, connect, connected, runQuery } =
-    useQueryData();
+  const { connect, connected, runQuery } = useQueryData();
   const { databases } = useAppData();
   const [messages, setMessages] = useState<TomeMessage[]>(initialMessages);
   const [thinking, setThinking] = useState(false);
@@ -149,20 +152,13 @@ export function useAgent({
       : { totalCount: res?.rowCount, records: res?.rows.splice(0, 5) ?? [] };
   }
 
-  async function sendMessage(content: string) {
+  async function sendMessage(content: string, conversation?: number) {
     setThinking(true);
-
-    const tools = getAgentTools({
-      getSchemaFn: getFullSchema,
-      query,
-      setQuery,
-      runQueryFn: executeQuery,
-    });
 
     const newMessage: TomeMessage = {
       id: nanoid(4),
       content,
-      conversation: null,
+      conversation: conversation ?? null,
       parts: [{ type: "text", text: content }],
       query: currentQuery?.id ?? null,
       role: "user",
@@ -185,12 +181,12 @@ export function useAgent({
 
     setMessages(newMessages);
 
-    await runAgentWithMessages(newMessages, tools);
+    await runAgentWithMessages(newMessages, conversation);
   }
 
   async function runAgentWithMessages(
     messagesToUse: TomeMessage[],
-    tools: any
+    conversation?: number
   ) {
     if (
       !settings?.aiFeatures.providers.anthropic.apiKey &&
@@ -198,6 +194,13 @@ export function useAgent({
     ) {
       return;
     }
+
+    const tools = getAgentTools({
+      getSchemaFn: getFullSchema,
+      query,
+      setQuery,
+      runQueryFn: executeQuery,
+    });
 
     const systemPrompt =
       mode === "editor"
@@ -243,7 +246,7 @@ export function useAgent({
                 role: "assistant" as const,
                 content: textDelta,
                 createdAt: new Date(),
-                conversation: null,
+                conversation: conversation ?? null,
                 query: currentQuery?.id ?? null,
                 parts: [],
               },
@@ -266,7 +269,7 @@ export function useAgent({
                 role: "assistant",
                 content: "",
                 createdAt: new Date(),
-                conversation: null,
+                conversation: conversation ?? null,
                 query: currentQuery?.id ?? null,
                 parts: [
                   {
@@ -366,7 +369,7 @@ export function useAgent({
             content: text,
             query: currentQuery?.id,
             role: "assistant",
-            conversation: null,
+            conversation: conversation ?? null,
             parts: calls,
           });
         }
@@ -393,29 +396,13 @@ export function useAgent({
     // Reset permission needed flag
     setPermissionNeeded(false);
 
-    // Get tools for the agent
-    const tools = getAgentTools({
-      getSchemaFn: getFullSchema,
-      query,
-      setQuery,
-      runQueryFn: executeQuery,
-    });
-
     // Refresh the response with updated messages
-    await runAgentWithMessages(updatedMessages, tools);
+    await runAgentWithMessages(updatedMessages);
   }
 
   async function refreshResponse() {
-    // Get tools for the agent
-    const tools = getAgentTools({
-      getSchemaFn: getFullSchema,
-      query,
-      setQuery,
-      runQueryFn: executeQuery,
-    });
-
     // Run the agent again with current messages
-    await runAgentWithMessages(messages, tools);
+    await runAgentWithMessages(messages);
   }
 
   return {

@@ -84,6 +84,13 @@ export default function ChatInterface() {
 
   async function send(msg: string) {
     setInput("");
+    if (!selectedConversation) {
+      const convo = await window.conversations.createConversation(msg);
+      setSelectedConversation(convo.id);
+      await sendMessage(msg, convo.id);
+      return;
+    }
+    await sendMessage(msg, selectedConversation);
   }
 
   const suggestions = [
@@ -162,7 +169,7 @@ export default function ChatInterface() {
             onModelChange={setModel}
             input={input}
             setInput={setInput}
-            onSubmit={() => sendMessage(input)}
+            onSubmit={() => send(input)}
           />
         </div>
       )}
