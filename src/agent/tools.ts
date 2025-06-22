@@ -30,7 +30,7 @@ export function getAgentTools({
   let updateQuery: Tool<any, any> | undefined = undefined;
   let updateQuerySection: Tool<any, any> | undefined = undefined;
 
-  if (setQuery && query) {
+  if (setQuery && query !== undefined) {
     updateQuery = tool({
       description:
         "Update the query by either replacing the entire query or appending to it.",
