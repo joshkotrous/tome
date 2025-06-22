@@ -1,9 +1,9 @@
 import { useAppData } from "@/applicationDataProvider";
-import { DatabaseSchema, TomeMessage } from "@/types";
-import { streamResponse, TomeAgentModel } from "core/ai";
-import React, { SetStateAction, useState } from "react";
+import { ConnectionSchema, TomeMessage } from "@/types";
+import { streamResponse, TomeAgentModel } from "../../core/ai";
+import React, { SetStateAction, useState, useEffect } from "react";
 import { getAgentTools } from "./tools";
-import { EDITOR_AGENT_PROMPT } from "./prompts";
+import { AGENT_MODE_PROMPT, EDITOR_AGENT_PROMPT } from "./prompts";
 import { nanoid } from "nanoid";
 import { useQueryData } from "@/queryDataProvider";
 import { ToolInvocationUIPart } from "@ai-sdk/ui-utils";
@@ -87,58 +87,111 @@ interface UseAgentOptions {
   initialMessages: TomeMessage[];
   mode?: "editor" | "agent";
   model: TomeAgentModel;
-  schema: DatabaseSchema;
-  permissionNeeded?: boolean;
-  setPermissionNeeded: React.Dispatch<SetStateAction<boolean>>;
-  query: string;
-  setQuery: React.Dispatch<SetStateAction<string>>;
-  getSchemaFn: (connectionName: string, connectionId: number) => any;
-  runQueryFn: (
-    connectionName: string,
-    connectionId: number,
-    query: string
-  ) => any;
+  schema?: ConnectionSchema;
+  query?: string;
+  setQuery?: React.Dispatch<SetStateAction<string>>;
 }
 
 export function useAgent({
   initialMessages,
   mode,
   model,
-  setPermissionNeeded,
   query,
   schema,
   setQuery,
-  getSchemaFn,
-  runQueryFn,
 }: UseAgentOptions) {
   const { settings } = useAppData();
-  const { currentQuery, currentConnection } = useQueryData();
+  const { currentQuery, currentConnection, connect, connected, runQuery } =
+    useQueryData();
+  const { databases } = useAppData();
   const [messages, setMessages] = useState<TomeMessage[]>(initialMessages);
   const [thinking, setThinking] = useState(false);
+  const [permissionNeeded, setPermissionNeeded] = useState(false);
+
+  // Update messages when initialMessages changes (e.g., when switching queries)
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
+
+  async function getConnection(connectionName: string, connectionId: number) {
+    let conn =
+      connected.find(
+        (i) => i.name === connectionName && i.id === connectionId
+      ) ?? null;
+    if (!conn) {
+      const db = databases.find((i) => i.id === connectionId);
+      if (!db) {
+        throw new Error(`Could not find ${connectionId}`);
+      }
+      conn = await connect(db);
+    }
+    if (!conn) {
+      throw new Error(`Could not connect to ${connectionId}:${connectionName}`);
+    }
+    return conn;
+  }
+
+  async function getFullSchema(connectionName: string, connectionId: number) {
+    const conn = await getConnection(connectionName, connectionId);
+    const schema = await window.connections.getConnectionSchema(conn.id);
+    return schema;
+  }
+
+  async function executeQuery(
+    connectionName: string,
+    connectionId: number,
+    query: string
+  ) {
+    const conn = await getConnection(connectionName, connectionId);
+    const res = await runQuery(conn, query);
+    return res && "error" in res
+      ? res
+      : { totalCount: res?.rowCount, records: res?.rows.splice(0, 5) ?? [] };
+  }
 
   async function sendMessage(content: string) {
     setThinking(true);
 
     const tools = getAgentTools({
-      getSchemaFn,
+      getSchemaFn: getFullSchema,
       query,
       setQuery,
-      runQueryFn,
+      runQueryFn: executeQuery,
     });
 
-    const newMessages: TomeMessage[] = [
-      ...messages,
-      {
-        id: nanoid(4),
-        content,
-        conversation: null,
-        parts: [],
-        query: null,
-        role: "user",
-        createdAt: new Date(),
-      },
-    ];
+    const newMessage: TomeMessage = {
+      id: nanoid(4),
+      content,
+      conversation: null,
+      parts: [{ type: "text", text: content }],
+      query: currentQuery?.id ?? null,
+      role: "user",
+      createdAt: new Date(),
+    };
 
+    await window.messages.createMessage(newMessage);
+
+    const newMessages: TomeMessage[] = permissionNeeded
+      ? [
+          ...updateMessagesWithToolResult(
+            messages,
+            "Approval cancelled. Moving on"
+          ),
+          newMessage,
+        ]
+      : [...messages, newMessage];
+
+    setPermissionNeeded(false);
+
+    setMessages(newMessages);
+
+    await runAgentWithMessages(newMessages, tools);
+  }
+
+  async function runAgentWithMessages(
+    messagesToUse: TomeMessage[],
+    tools: any
+  ) {
     if (
       !settings?.aiFeatures.providers.anthropic.apiKey &&
       !settings?.aiFeatures.providers.openai.apiKey
@@ -148,18 +201,13 @@ export function useAgent({
 
     const systemPrompt =
       mode === "editor"
-        ? EDITOR_AGENT_PROMPT.replace("{{CURRENT_QUERY}}", query)
+        ? EDITOR_AGENT_PROMPT.replace("{{CURRENT_QUERY}}", query ?? "")
             .replace(
               "{{CURRENT_CONNECTION}}",
               JSON.stringify(currentConnection)
             )
-            .replace("{{FULL_SCHEMA}}", "")
-        : EDITOR_AGENT_PROMPT.replace("{{CURRENT_QUERY}}", query)
-            .replace(
-              "{{CURRENT_CONNECTION}}",
-              JSON.stringify(currentConnection)
-            )
-            .replace("{{FULL_SCHEMA}}", JSON.stringify(schema));
+            .replace("{{FULL_SCHEMA}}", JSON.stringify(schema))
+        : AGENT_MODE_PROMPT.replace("{{DATABASES}}", JSON.stringify(databases));
 
     const streamResult = streamResponse({
       apiKey:
@@ -171,17 +219,18 @@ export function useAgent({
       provider: model.provider,
       tools,
       maxSteps: 10,
-      toolChoice: "required",
-      messages: newMessages,
+      messages: messagesToUse,
       system: systemPrompt,
+      onStepFinish: ({ toolCalls }) => {
+        console.log("STEP FINISH: ", toolCalls);
+      },
       onChunk: ({ chunk }) => {
-        console.log(chunk);
         if (chunk.type === "text-delta") {
           setMessages((m) => {
             const { textDelta } = chunk;
             const last = m[m.length - 1];
             // Check if we should append to existing assistant message
-            if (last?.role === "assistant" && !(last as any).toolTag) {
+            if (last?.role === "assistant") {
               return [
                 ...m.slice(0, -1),
                 { ...last, content: last.content + textDelta },
@@ -241,6 +290,24 @@ export function useAgent({
             setPermissionNeeded(true);
             return;
           }
+          window.messages.createMessage({
+            content: "",
+            conversation: null,
+            query: currentQuery?.id ?? null,
+            parts: [
+              {
+                type: "tool-invocation",
+                toolInvocation: {
+                  toolName,
+                  toolCallId,
+                  state: "result",
+                  result: "",
+                  args: {},
+                },
+              },
+            ],
+            role: "assistant",
+          });
           setMessages((prevMsgs) => {
             const toolMsgIndex = prevMsgs.findIndex((msg) =>
               msg.parts?.find(
@@ -306,8 +373,58 @@ export function useAgent({
       },
     });
 
-    await streamResult.consumeStream();
+    await streamResult
+      .consumeStream()
+      .catch()
+      .finally(() => setThinking(false));
   }
 
-  return { messages, sendMessage, thinking };
+  async function approveQuery() {
+    // Update messages with approval result
+    const updatedMessages = updateMessagesWithToolResult(
+      messages,
+      { approved: true },
+      undefined // Will find the first pending tool
+    );
+
+    // Update the messages state
+    setMessages(updatedMessages);
+
+    // Reset permission needed flag
+    setPermissionNeeded(false);
+
+    // Get tools for the agent
+    const tools = getAgentTools({
+      getSchemaFn: getFullSchema,
+      query,
+      setQuery,
+      runQueryFn: executeQuery,
+    });
+
+    // Refresh the response with updated messages
+    await runAgentWithMessages(updatedMessages, tools);
+  }
+
+  async function refreshResponse() {
+    // Get tools for the agent
+    const tools = getAgentTools({
+      getSchemaFn: getFullSchema,
+      query,
+      setQuery,
+      runQueryFn: executeQuery,
+    });
+
+    // Run the agent again with current messages
+    await runAgentWithMessages(messages, tools);
+  }
+
+  return {
+    messages,
+    sendMessage,
+    thinking,
+    approveQuery,
+    refreshResponse,
+    permissionNeeded,
+    setPermissionNeeded,
+  };
 }

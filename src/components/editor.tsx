@@ -21,15 +21,12 @@ import { cn, parseBool } from "@/lib/utils";
 import ChatInterface, { ChatInputDisplay } from "./chatInterface";
 import { Switch } from "./ui/switch";
 import { AnimatePresence, motion } from "framer-motion";
-import { streamResponse, TomeAgentModel, ToolMap } from "../../core/ai";
+import { TomeAgentModel } from "../../core/ai";
 import ResizableContainer from "./ui/resizableContainer";
-import { ConnectionSchema, TomeMessage, Query } from "@/types";
-import { z } from "zod";
-import { tool } from "ai";
-import { ToolInvocationUIPart } from "@ai-sdk/ui-utils";
+import { ConnectionSchema, Query } from "@/types";
 import { DBInformation } from "./sidebar";
 import { createSchemaCompletionProvider } from "./monacoConfig";
-import { nanoid } from "nanoid";
+import { useAgent } from "@/agent/useAgent";
 
 export default function QueryInterface() {
   const { agentModeEnabled, setAgentModeEnabled, settings } = useAppData();
@@ -346,15 +343,13 @@ export function SqlEditor() {
                 wordWrap: "on",
                 fontSize: 14,
                 tabSize: 2,
-                // Key options to fix the resizing issue:
-                automaticLayout: true, // Automatically layout when container resizes
+                automaticLayout: true,
                 scrollBeyondLastLine: false,
-                overviewRulerLanes: 0, // Disable overview ruler
+                overviewRulerLanes: 0,
                 hideCursorInOverviewRuler: true,
                 overviewRulerBorder: false,
-                // Prevent Monaco from interfering with mouse events outside the editor
                 mouseWheelZoom: false,
-                contextmenu: false, // Disable right-click menu to prevent event conflicts
+                contextmenu: false,
               }}
               className="bg-zinc-950"
             />
@@ -385,15 +380,7 @@ function EditorAgent({
   thinking: boolean;
   setThinking: React.Dispatch<SetStateAction<boolean>>;
 }) {
-  const {
-    runQuery,
-    currentQuery,
-    queryMessages,
-    currentConnection,
-    connect,
-    connected,
-  } = useQueryData();
-  const { settings, databases } = useAppData();
+  const { currentQuery, queryMessages, currentConnection } = useQueryData();
   const [collapsed, setCollapsed] = useState(
     parseBool(localStorage.getItem("editorAgentOpen"))
   );
@@ -402,429 +389,38 @@ function EditorAgent({
     provider: "Open AI",
     name: "gpt-4o",
   });
-  const [messages, setMessages] = useState<TomeMessage[]>([]);
 
-  const [permissionNeeded, setPermissionNeeded] = useState(false);
+  // Use the new agent hook
+  const {
+    messages,
+    sendMessage,
+    thinking: agentThinking,
+    approveQuery,
+    permissionNeeded,
+    setPermissionNeeded,
+  } = useAgent({
+    initialMessages: queryMessages,
+    mode: "editor",
+    model,
+    schema: schema || { connection: currentConnection!, databases: [] },
+    query,
+    setQuery: onQueryChange,
+  });
 
+  // Sync thinking state
   useEffect(() => {
-    setMessages(queryMessages);
-  }, [queryMessages]);
+    setThinking(agentThinking);
+  }, [agentThinking, setThinking]);
 
   useEffect(() => {
     localStorage.setItem("editorAgentOpen", String(collapsed));
   }, [collapsed]);
 
-  async function getConnection(connectionName: string, connectionId: number) {
-    let conn =
-      connected.find(
-        (i) => i.name === connectionName && i.id === connectionId
-      ) ?? null;
-    if (!conn) {
-      const db = databases.find((i) => i.id === connectionId);
-      if (!db) {
-        throw new Error(`Could not find ${connectionId}`);
-      }
-      conn = await connect(db);
-    }
-    if (!conn) {
-      throw new Error(`Could not connect to ${connectionId}:${connectionName}`);
-    }
-    return conn;
-  }
-
-  async function getFullSchema(connectionName: string, connectionId: number) {
-    const conn = await getConnection(connectionName, connectionId);
-    const schema = await window.connections.getConnectionSchema(conn.id);
-    return schema;
-  }
-
-  async function executeQuery(
-    connectionName: string,
-    connectionId: number,
-    query: string
-  ) {
-    const conn = await getConnection(connectionName, connectionId);
-    const res = await runQuery(conn, query);
-    return res && "error" in res
-      ? res
-      : { totalCount: res?.rowCount, records: res?.rows.splice(0, 5) ?? [] };
-  }
-
-  async function getAgentResponse(newMessages: TomeMessage[]) {
-    if (
-      !settings?.aiFeatures.enabled ||
-      (!settings.aiFeatures.providers.openai.enabled &&
-        !settings.aiFeatures.providers.anthropic.enabled)
-    )
-      return;
-
-    const queryObject = z.object({
-      query: z.string().describe("The new query to replace or apppend"),
-      mode: z
-        .enum(["append", "replace"])
-        .describe(
-          "Whether to append the existing query or replace it from the whole thing.  If mode is append, only the new query snippet that should be applied. Dont include the existing query"
-        ),
-    });
-
-    const tools: ToolMap = {
-      updateQuery: tool({
-        description:
-          "Update the query by either replacing the entire query or appending to it.",
-        parameters: queryObject,
-        execute: async ({ query: newQuery, mode }) => {
-          if (
-            !settings?.aiFeatures.enabled ||
-            (!settings.aiFeatures.providers.openai.enabled &&
-              !settings.aiFeatures.providers.anthropic.enabled)
-          )
-            return;
-
-          if (mode === "replace") {
-            // Clear query first
-            onQueryChange("");
-
-            // Add a small delay to ensure clearing is processed
-            await new Promise((resolve) => setTimeout(resolve, 10));
-
-            // Split the new query into lines
-            const queryLines = newQuery.split("\n");
-
-            // Sequentially add each line
-            for (let i = 0; i < queryLines.length; i++) {
-              const line = queryLines[i];
-              const isLastLine = i === queryLines.length - 1;
-
-              onQueryChange((prev) => {
-                // Add the line and a newline (except for the last line to avoid trailing newline)
-                return prev + line + (isLastLine ? "" : "\n");
-              });
-
-              // Small delay between each line for visual effect
-              await new Promise((resolve) => setTimeout(resolve, 20));
-            }
-
-            return `Successfully replaced the entire query with new content.`;
-          } else if (mode === "append") {
-            // Add newlines to separate from existing content if query is not empty
-            const separator = query.trim() ? "\n\n" : "";
-            const contentToAppend = separator + newQuery;
-            const appendLines = contentToAppend.split("\n");
-
-            // Sequentially add each line of the appended content
-            for (let i = 0; i < appendLines.length; i++) {
-              const line = appendLines[i];
-              const isLastLine = i === appendLines.length - 1;
-
-              onQueryChange((prev) => {
-                // Add the line and a newline (except for the last line to avoid trailing newline)
-                return prev + line + (isLastLine ? "" : "\n");
-              });
-
-              // Small delay between each line for visual effect
-              await new Promise((resolve) => setTimeout(resolve, 20));
-            }
-
-            return `Successfully appended new content to the existing query.`;
-          }
-
-          return "Invalid mode specified. Use 'replace' or 'append'.";
-        },
-      }),
-      updateQuerySection: tool({
-        description: "Use to update a section of the query",
-        parameters: z.object({
-          querySnippet: z
-            .string()
-            .describe("The new query snippet with updates applied"),
-          startLine: z
-            .number()
-            .describe(
-              "The start line where the update should be made (1-based)"
-            ),
-          endLine: z
-            .number()
-            .describe("The end line where the update should be made (1-based)"),
-        }),
-        execute: async ({ querySnippet, startLine, endLine }) => {
-          const queryLines = query.split("\n");
-
-          const startIndex = Math.max(0, startLine - 1);
-          const endIndex = Math.max(0, endLine - 1);
-
-          if (startIndex >= queryLines.length) {
-            throw new Error(
-              `Start line ${startLine} is beyond the query length (${queryLines.length} lines)`
-            );
-          }
-
-          if (endIndex >= queryLines.length) {
-            throw new Error(
-              `End line ${endLine} is beyond the query length (${queryLines.length} lines)`
-            );
-          }
-
-          if (startLine > endLine) {
-            throw new Error(
-              `Start line ${startLine} cannot be greater than end line ${endLine}`
-            );
-          }
-
-          const snippetLines = querySnippet.split("\n");
-
-          const beforeLines = queryLines.slice(0, startIndex);
-          const afterLines = queryLines.slice(endIndex + 1);
-
-          const baseQuery = [
-            ...beforeLines,
-            ...new Array(snippetLines.length).fill(""),
-            ...afterLines,
-          ].join("\n");
-
-          onQueryChange(baseQuery);
-
-          await new Promise((resolve) => setTimeout(resolve, 10));
-
-          for (let i = 0; i < snippetLines.length; i++) {
-            const snippetLine = snippetLines[i];
-            const targetLineIndex = startIndex + i;
-
-            onQueryChange((prev) => {
-              const lines = prev.split("\n");
-              lines[targetLineIndex] = snippetLine;
-              return lines.join("\n");
-            });
-
-            await new Promise((resolve) => setTimeout(resolve, 20));
-          }
-
-          return `Successfully updated lines ${startLine}-${endLine} with the new query snippet.`;
-        },
-      }),
-      runQuery: tool({
-        description:
-          "Run a SQL query and return JSON rows. Select the most likely relevant connection from <databases> that should be used in the query",
-        parameters: z.object({
-          query: z.string(),
-          connectionId: z
-            .number()
-            .describe("The connection ID from the database list"),
-          connectionName: z
-            .string()
-            .describe("The connection name from the database list"),
-        }),
-        execute: async ({ query, connectionId, connectionName }) =>
-          JSON.stringify(
-            await executeQuery(connectionName, connectionId, query)
-          ),
-      }),
-      getSchema: tool({
-        description:
-          "Gets the full schema for a given connection. Used to get more context about the db you're querying to know what tables/columns you have access to",
-        parameters: z.object({
-          connectionId: z
-            .number()
-            .describe("The connection ID from the database list"),
-          connectionName: z
-            .string()
-            .describe("The connection name from the database list"),
-        }),
-        execute: async ({ connectionId, connectionName }) =>
-          JSON.stringify(await getFullSchema(connectionName, connectionId)),
-      }),
-      askForPermission: tool({
-        description: "Ask the user for permission to run destructive queries",
-        parameters: z.object({}),
-      }),
-    };
-
-    const streamResult = streamResponse({
-      apiKey:
-        model.provider === "Open AI"
-          ? settings.aiFeatures.providers.openai.apiKey
-          : settings.aiFeatures.providers.anthropic.apiKey,
-      model: model.name,
-      toolCallStreaming: true,
-      provider: model.provider,
-      tools,
-      maxSteps: 10,
-      toolChoice: "required",
-      messages: newMessages,
-      system: `You are a helpful database administrator embedded in a database client. Assist the user with any help they need with their database.\nThis is the current query: <current_query>${query}</current_query>.\nThe currently connected database is ${JSON.stringify(
-        currentConnection,
-        null,
-        2
-      )}
-      
-
-      This is the full schema: 
-      ${JSON.stringify(schema, null, 2)}
-
-      The current query within the tags is the query currently displayed in the editor. If the user asks questions about the current query, or without much context. This is the query they're talking about. In this case, dont refer to queries in previous messages unless specifically asked by the user. 
-      BEHAVIOR GUIDELINES:
-      1. When a user is asking about a query, they're asking about the contents query in the **editor**, which is within <current_query>. This should be the basis of any of your explanations.
-      2. Only refer to queries in previous messages if specifically asked by the user. Again they're generally asking about the contents within the editor by default, which is stored in <current_query>
-      3. If a query is nondestructive, default to using the runQuery tool to run the query
-
-      TOOL USE INSTRUCTIONS:
-      1. When a user asks you to write a query, generally default to updating it by using the updateQuery tool
-      2. When asked to write a query dont output it, use the update query tool to update the query within the code editor embedded in the client that is visible to the user.
-      3. Use the getSchema tool to get the full schema from the database to assist you in writing the query.
-      4. When using the sub agent to generate a query, provide full and complete instructions with context from the schema to ensure it is production ready and works as expected.
-      5. Use the runQuery tool to run the generated query and test to ensure its valid. If you encounter an error, update the query to fix it.
-      6. If the query is initially empty or has to be completely rewritten, use the updateQuery tool to update the query using a subagent
-      7. If only a piece of the query needs to be updated, use the updateQuerySection tool to only update that section with the applicable snippet replacement
-      8. You MUST Use the **askForPermission** tool to ask the user for permission to run a query, do NOT ask them inline. Once permission is provided, you MUST use the **runQuery** tool to run the query
-      
-      QUERY SYNTAX REQUIREMENTS:
-      1. If the engine is Postgres, any entity names in **camelCase MUST be surrounded by double quotes**.`,
-      onChunk: ({ chunk }) => {
-        console.log(chunk);
-        if (chunk.type === "text-delta") {
-          setMessages((m) => {
-            const { textDelta } = chunk;
-            const last = m[m.length - 1];
-            // Check if we should append to existing assistant message
-            if (last?.role === "assistant" && !(last as any).toolTag) {
-              return [
-                ...m.slice(0, -1),
-                { ...last, content: last.content + textDelta },
-              ];
-            }
-            return [
-              ...m,
-              {
-                id: nanoid(4),
-                role: "assistant" as const,
-                content: textDelta,
-                createdAt: new Date(),
-                conversation: null,
-                query: currentQuery?.id ?? null,
-                parts: [],
-              },
-            ];
-          });
-        }
-
-        if (chunk.type === "tool-call-streaming-start") {
-          const { toolName } = chunk;
-
-          if (toolName === "askForPermission") {
-            setPermissionNeeded(true);
-          }
-          setMessages((m) => {
-            const { toolName, toolCallId } = chunk;
-            return [
-              ...m,
-              {
-                id: nanoid(4),
-                role: "assistant",
-                content: "",
-                createdAt: new Date(),
-                conversation: null,
-                query: currentQuery?.id ?? null,
-                parts: [
-                  {
-                    type: "tool-invocation",
-                    toolInvocation: {
-                      toolCallId,
-                      toolName,
-                      state: "partial-call",
-                      args: [],
-                    },
-                  },
-                ],
-              },
-            ];
-          });
-        }
-
-        if (chunk.type === "tool-call") {
-          const { toolCallId, toolName } = chunk;
-          if (toolName === "askForPermission") {
-            setPermissionNeeded(true);
-            return;
-          }
-          setMessages((prevMsgs) => {
-            const toolMsgIndex = prevMsgs.findIndex((msg) =>
-              msg.parts?.find(
-                (part) =>
-                  part.type === "tool-invocation" &&
-                  part.toolInvocation.state === "partial-call" &&
-                  part.toolInvocation.toolCallId === toolCallId
-              )
-            );
-
-            if (toolMsgIndex === -1) {
-              console.warn(`Tool message with ID ${toolCallId} not found`);
-              return prevMsgs;
-            }
-
-            const toolMsg = prevMsgs[toolMsgIndex];
-            const updatedMsg: TomeMessage = {
-              ...toolMsg,
-              parts: toolMsg.parts?.map((part) => {
-                if (
-                  part.type === "tool-invocation" &&
-                  part.toolInvocation.toolCallId === toolCallId
-                ) {
-                  return {
-                    ...part,
-                    toolInvocation: {
-                      ...part.toolInvocation,
-                      state: "result",
-                      result: "",
-                    },
-                  };
-                }
-                return part;
-              }),
-            };
-
-            return prevMsgs.map((msg, index) =>
-              index === toolMsgIndex ? updatedMsg : msg
-            );
-          });
-        }
-      },
-      onFinish: ({ text, toolCalls }) => {
-        const calls: ToolInvocationUIPart[] = toolCalls.map((i) => ({
-          type: "tool-invocation",
-          toolInvocation: {
-            state: "result",
-            toolCallId: i.toolCallId,
-            toolName: i.toolName,
-            args: i.args,
-            result: "",
-          },
-        }));
-        if (currentQuery) {
-          window.messages.createMessage({
-            content: text,
-            query: currentQuery?.id,
-            role: "assistant",
-            conversation: null,
-            parts: calls,
-          });
-        }
-      },
-    });
-
-    await streamResult.consumeStream();
-  }
-
-  async function sendMessage(input: Omit<TomeMessage, "id">) {
-    setThinking(true);
+  async function handleSendMessage(input: string) {
     setInput("");
     setPermissionNeeded(false);
     if (!currentQuery) return;
-    const msg = await window.messages.createMessage(input);
-    const newMessages: TomeMessage[] = [...messages, msg];
-    setMessages(newMessages);
-    console.log("New MEssages", newMessages);
-
-    await getAgentResponse(newMessages);
-    setThinking(false);
+    await sendMessage(input);
   }
 
   return (
@@ -861,10 +457,7 @@ function EditorAgent({
           </div>
 
           <ChatInputDisplay
-            query={currentQuery ?? undefined}
-            setPermissionNeeded={setPermissionNeeded}
-            refreshResponse={getAgentResponse}
-            setMessages={setMessages}
+            refreshResponse={approveQuery}
             permissionNeeded={permissionNeeded}
             showQueryControls
             thinking={thinking}
@@ -873,7 +466,7 @@ function EditorAgent({
             model={model}
             setInput={setInput}
             setModel={setModel}
-            sendMessage={sendMessage}
+            sendMessage={handleSendMessage}
           />
         </div>
       )}

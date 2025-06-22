@@ -7,6 +7,7 @@ import {
   StreamTextOnChunkCallback,
   StreamTextOnFinishCallback,
   ToolChoice,
+  StreamTextOnStepFinishCallback,
 } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
@@ -115,6 +116,7 @@ export interface StreamResponseOptions {
   onChunk?: StreamTextOnChunkCallback<ToolMap>;
   onFinish?: StreamTextOnFinishCallback<ToolMap>;
   toolChoice?: ToolChoice<ToolMap>;
+  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>;
 }
 
 export function streamResponse(
@@ -133,7 +135,9 @@ export function streamResponse(
         opts.maxSteps,
         opts.toolCallStreaming,
         opts.onChunk,
-        opts.onFinish
+        opts.onFinish,
+        opts.toolChoice,
+        opts.onStepFinish
       );
     case "Anthropic":
       return streamAnthropic(
@@ -146,7 +150,9 @@ export function streamResponse(
         opts.maxSteps,
         opts.toolCallStreaming,
         opts.onChunk,
-        opts.onFinish
+        opts.onFinish,
+        opts.toolChoice,
+        opts.onStepFinish
       );
     default:
       throw new Error(`Unsupported provider: ${opts.provider}`);
@@ -164,7 +170,8 @@ function streamOpenAI(
   toolCallStreaming?: boolean,
   onChunk?: StreamTextOnChunkCallback<ToolMap>,
   onFinish?: StreamTextOnFinishCallback<ToolMap>,
-  toolChoice?: ToolChoice<ToolMap>
+  toolChoice?: ToolChoice<ToolMap>,
+  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>
 ): StreamTextResult<ToolMap, never> {
   const openai = createOpenAI({ apiKey });
   return streamText({
@@ -178,6 +185,7 @@ function streamOpenAI(
     onChunk,
     onFinish,
     toolChoice,
+    onStepFinish,
   });
 }
 
@@ -192,7 +200,8 @@ function streamAnthropic(
   toolCallStreaming?: boolean,
   onChunk?: StreamTextOnChunkCallback<ToolMap>,
   onFinish?: StreamTextOnFinishCallback<ToolMap>,
-  toolChoice?: ToolChoice<ToolMap>
+  toolChoice?: ToolChoice<ToolMap>,
+  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>
 ): StreamTextResult<ToolMap, never> {
   function getAnthropicModel(model: TomeAnthropicAgentModel) {
     switch (model) {
@@ -220,6 +229,7 @@ function streamAnthropic(
     onChunk,
     onFinish,
     toolChoice,
+    onStepFinish,
   });
 }
 
@@ -230,6 +240,7 @@ export async function getResponse(opts: {
   apiKey: string;
   provider: AIProvider;
   messages?: Omit<Message, "id">[];
+  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>;
 }): Promise<GenerateTextResult<ToolMap, never>> {
   const { prompt, tools = {} } = opts;
   switch (opts.provider) {

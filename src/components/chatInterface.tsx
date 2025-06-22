@@ -13,12 +13,11 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { cn, displayDate } from "@/lib/utils";
-import { useAgent } from "@/useAgent";
 import Spinner from "./ui/spinner";
 import MarkdownRenderer from "./markdownRederer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import ResizableContainer from "./ui/resizableContainer";
-import { Conversation, Query, TomeMessage } from "@/types";
+import { Conversation, TomeMessage } from "@/types";
 import { Input } from "./ui/input";
 import {
   Dialog,
@@ -44,7 +43,9 @@ import {
   TextUIPart,
   ToolInvocationUIPart,
 } from "@ai-sdk/ui-utils";
-import { updateMessagesWithToolResult } from "@/agent/useAgent";
+import { Text } from "./ui/text";
+import { AnimateEllipse } from "./animatedEllipse";
+import { useAgent } from "@/agent/useAgent";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -73,22 +74,15 @@ export default function ChatInterface() {
   >(null);
   const [input, setInput] = useState("");
 
-  const [messages, setMessages] = useState<TomeMessage[]>([]);
+  const [initialMessages, setInitialMessages] = useState<TomeMessage[]>([]);
 
-  const { msgs, send, thinking } = useAgent({
-    messages,
-    setMessages,
+  const { messages, thinking, sendMessage } = useAgent({
+    initialMessages,
+    model,
+    mode: "agent",
   });
-  async function sendMessage(msg: Omit<TomeMessage, "id">) {
-    let convo: number | null = selectedConversation;
-    if (!selectedConversation) {
-      const newConversation = await window.conversations.createConversation(
-        msg.content
-      );
-      convo = newConversation.id;
-      setSelectedConversation(newConversation.id);
-    }
-    send(msg.content, model, convo);
+
+  async function send(msg: string) {
     setInput("");
   }
 
@@ -116,9 +110,9 @@ export default function ChatInterface() {
     async function getData() {
       if (selectedConversation) {
         const convo = await window.messages.listMessages(selectedConversation);
-        setMessages(convo);
+        setInitialMessages(convo);
       } else {
-        setMessages([]);
+        setInitialMessages([]);
       }
     }
     getData();
@@ -133,7 +127,7 @@ export default function ChatInterface() {
       {selectedConversation && messages.length > 0 && (
         <ChatInputDisplay
           showQueryControls={false}
-          messages={msgs}
+          messages={messages}
           thinking={thinking}
           input={input}
           setInput={setInput}
@@ -151,15 +145,7 @@ export default function ChatInterface() {
             {suggestions.map((i) => (
               <div
                 key={i.name}
-                onClick={() =>
-                  sendMessage({
-                    query: null,
-                    role: "user",
-                    content: i.message,
-                    conversation: null,
-                    parts: [],
-                  })
-                }
+                onClick={() => sendMessage(i.message)}
                 className="text-xs px-2 p-1 border rounded-full bg-zinc-900 hover:bg-zinc-800 select-none transition-all"
               >
                 {i.name}
@@ -176,15 +162,7 @@ export default function ChatInterface() {
             onModelChange={setModel}
             input={input}
             setInput={setInput}
-            onSubmit={() =>
-              sendMessage({
-                role: "user",
-                content: input,
-                conversation: selectedConversation,
-                parts: [],
-                query: null,
-              })
-            }
+            onSubmit={() => sendMessage(input)}
           />
         </div>
       )}
@@ -193,7 +171,6 @@ export default function ChatInterface() {
 }
 
 export function ChatInputDisplay({
-  setMessages,
   permissionNeeded,
   setModel,
   model,
@@ -204,24 +181,17 @@ export function ChatInputDisplay({
   sendMessage,
   showQueryControls = true,
   refreshResponse,
-  setPermissionNeeded,
-  conversation,
-  query,
 }: {
   permissionNeeded?: boolean;
-  setPermissionNeeded?: React.Dispatch<SetStateAction<boolean>>;
-  refreshResponse?: (newMessages: TomeMessage[]) => Promise<void>;
+  refreshResponse?: () => Promise<void>;
   messages: TomeMessage[];
-  setMessages?: React.Dispatch<SetStateAction<TomeMessage[]>>;
   thinking: boolean;
   setModel: React.Dispatch<SetStateAction<TomeAgentModel>>;
   model: TomeAgentModel;
   input: string;
   setInput: React.Dispatch<SetStateAction<string>>;
-  sendMessage: (val: Omit<TomeMessage, "id">) => Promise<void>;
+  sendMessage: (val: string) => Promise<void>;
   showQueryControls: boolean;
-  query?: Query;
-  conversation?: Conversation;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -297,31 +267,7 @@ export function ChatInputDisplay({
                 >
                   {thinking && <Thinking />}
                   {permissionNeeded && (
-                    <div className="w-full flex items-center justify-between">
-                      Permission Required to Continue
-                      <Button
-                        onClick={() => {
-                          const newMessages = updateMessagesWithToolResult(
-                            messages,
-                            "Permission approved"
-                          );
-                          console.log("newMessages", newMessages);
-                          if (setMessages) {
-                            setMessages(newMessages);
-                          }
-                          if (refreshResponse) {
-                            refreshResponse(newMessages);
-                          }
-                          if (setPermissionNeeded) {
-                            setPermissionNeeded((prev) => !prev);
-                          }
-                        }}
-                        size="xs"
-                        className="bg-green-500/25 border-green-400 text-green-400 hover:bg-green-500/50 transition-all !p-1 !px-2 !h-fit !text-[10px]"
-                      >
-                        Run Query
-                      </Button>
-                    </div>
+                    <ApproveQueryButton refreshResponse={refreshResponse} />
                   )}
                 </motion.div>
               )}
@@ -334,18 +280,58 @@ export function ChatInputDisplay({
             onModelChange={setModel}
             input={input}
             setInput={setInput}
-            onSubmit={() =>
-              sendMessage({
-                role: "user",
-                content: input,
-                conversation: conversation?.id ?? null,
-                parts: [{ type: "text", text: input }],
-                query: query?.id ?? null,
-              })
-            }
+            onSubmit={() => sendMessage(input)}
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+function ApproveQueryButton({
+  refreshResponse,
+}: {
+  refreshResponse?: () => Promise<void>;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: any) => {
+      // Check for Cmd+Shift+Enter (Mac) or Ctrl+Shift+Enter (Windows/Linux)
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.shiftKey &&
+        event.key === "Enter"
+      ) {
+        event.preventDefault();
+        if (refreshResponse) {
+          refreshResponse();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [refreshResponse]);
+
+  return (
+    <div className="w-full flex items-center justify-between">
+      <span>
+        Permission required to continue
+        <AnimateEllipse speed={300} />
+      </span>
+      <Button
+        onClick={() => {
+          if (refreshResponse) {
+            refreshResponse();
+          }
+        }}
+        size="xs"
+        className="bg-green-500/25 border-green-400 text-green-400 hover:bg-green-500/50 transition-all !p-1 !px-2 !h-fit !text-[10px]"
+      >
+        Run Query ⌘⇧↵
+      </Button>
     </div>
   );
 }
@@ -810,21 +796,33 @@ function toolDisplay(
 
   if (toolName === "getSchema") {
     if (state === "partial-call") {
-      return "Getting schema...";
+      return (
+        <Text className="text-xs" variant="shine">
+          Getting schema...
+        </Text>
+      );
     }
     return "Retrieved schema";
   }
 
   if (toolName === "updateQuery") {
     if (state === "partial-call") {
-      return "Updating query...";
+      return (
+        <Text className="text-xs" variant="shine">
+          Updating query...
+        </Text>
+      );
     }
     return "Updated query";
   }
 
   if (toolName === "runQuery") {
     if (state === "partial-call") {
-      return "Running query...";
+      return (
+        <Text className="text-xs" variant="shine">
+          Running query...
+        </Text>
+      );
     }
 
     return "Ran query";
@@ -843,9 +841,8 @@ function ChatMessage({
   message,
 }: {
   message: Omit<TomeMessage, "id">;
-  sendMessage: (v: TomeMessage) => void;
+  sendMessage: (v: string) => void;
 }) {
-  const { thinking } = useAgent();
   const fromUser = message.role === "user";
 
   return (
@@ -861,9 +858,10 @@ function ChatMessage({
           .map((k) => (
             <div className="border p-2 rounded-sm bg-zinc-900/75 w-fit my-1">
               <div className="flex gap-1.5 items-center text-xs text-zinc-400">
-                {k.toolInvocation.state === "partial-call" && (
-                  <Spinner className="size-3.5" />
-                )}
+                {k.toolInvocation.state === "partial-call" &&
+                  k.toolInvocation.toolName === "askForPermission" && (
+                    <Spinner className="size-3.5" />
+                  )}
                 {k.toolInvocation.state === "result" && (
                   <Check className="size-3.5 text-green-500" />
                 )}
@@ -889,12 +887,6 @@ function ChatMessage({
             )}
           >
             <MarkdownRenderer content={message.content} />
-
-            {thinking && (
-              <div className="flex gap-1.5 items-center">
-                <Spinner /> Thinking...
-              </div>
-            )}
           </div>
         </>
       )}

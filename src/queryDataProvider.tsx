@@ -153,6 +153,7 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
     setQueries(_queries);
     const _connections = await window.connections.listConnections();
     setConnections(_connections);
+
     return _queries;
   }
 
