@@ -7,10 +7,11 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { Database, Settings } from "./types";
+import { Connection, Settings } from "./types";
+import { parseBool } from "./lib/utils";
 
 interface AppDataContextValue {
-  databases: Database[];
+  databases: Connection[];
   settings: Settings | null;
   dbDataLoading: boolean;
   settingsDataLoading: boolean;
@@ -27,29 +28,63 @@ const AppDataContext = createContext<AppDataContextValue | undefined>(
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [dbDataLoading, setDbDataLoading] = useState(false);
   const [settingsDataLoading, setSettingsDataLoading] = useState(false);
-  const [databases, setDatabases] = useState<Database[]>([]);
+  const [databases, setDatabases] = useState<Connection[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [agentModeEnabled, setAgentModeEnabled] = useState(true);
+
+  // Initialize from localStorage, but will be overridden by settings if available
+  const [agentModeEnabled, setAgentModeEnabled] = useState(() => {
+    try {
+      return parseBool(localStorage.getItem("agentModeEnabled"));
+    } catch (error) {
+      console.warn("Failed to read from localStorage:", error);
+      return false;
+    }
+  });
+
+  // Sync agentModeEnabled to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem("agentModeEnabled", String(agentModeEnabled));
+    } catch (error) {
+      console.warn("Failed to write to localStorage:", error);
+    }
+  }, [agentModeEnabled]);
 
   const getDbData = useCallback(async () => {
     setDbDataLoading(true);
-    const dbs = await window.db.listDatabases().catch((e) => console.error(e));
-    if (dbs) {
+    try {
+      const dbs = await window.connections.listConnections();
       setDatabases(dbs);
+    } catch (error) {
+      console.error("Failed to load databases:", error);
+    } finally {
+      setDbDataLoading(false);
     }
-    setDbDataLoading(false);
   }, []);
 
   const getSettingsData = useCallback(async () => {
     setSettingsDataLoading(true);
-    const _settings = await window.settings
-      .getSettings()
-      .catch((e) => console.error(e));
-    if (_settings) {
+    try {
+      const _settings = await window.settings.getSettings();
       setSettings(_settings);
+
+      // agentModeEnabled is purely client-side, don't touch it here
+      // It's managed entirely through localStorage
+    } catch (error) {
+      console.error("Failed to load settings:", error);
+    } finally {
+      setSettingsDataLoading(false);
     }
-    setSettingsDataLoading(false);
   }, []);
+
+  // Custom setter for agentModeEnabled (no backend sync needed)
+  const setAgentModeEnabledWithSync = useCallback(
+    (value: SetStateAction<boolean>) => {
+      setAgentModeEnabled(value);
+      // No backend sync needed since this is purely client-side
+    },
+    []
+  );
 
   useEffect(() => {
     getDbData();
@@ -73,7 +108,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       refreshDatabases,
       refreshSettings,
       agentModeEnabled,
-      setAgentModeEnabled,
+      setAgentModeEnabled: setAgentModeEnabledWithSync,
     }),
     [
       dbDataLoading,
@@ -83,7 +118,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       refreshDatabases,
       refreshSettings,
       agentModeEnabled,
-      setAgentModeEnabled,
+      setAgentModeEnabledWithSync,
     ]
   );
 

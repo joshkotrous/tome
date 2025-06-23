@@ -28,10 +28,16 @@ export default function MarkdownRenderer({ content }: { content: string }) {
       />
     ),
     ul: (props: ComponentProps<"ul">) => (
-      <ul className="list-disc pl-5 text-sm flex flex-col gap-1" {...props} />
+      <ul
+        className="list-disc list-inside pl-5 text-sm flex flex-col gap-1"
+        {...props}
+      />
     ),
     ol: (props: ComponentProps<"ol">) => (
-      <ol className="list-decimal pl-5 text-sm flex flex-col" {...props} />
+      <ol
+        className="list-decimal list-inside list pl-5 text-sm flex flex-col"
+        {...props}
+      />
     ),
     li: (props: ComponentProps<"li">) => <li className="text-sm" {...props} />,
     blockquote: (props: ComponentProps<"blockquote">) => (
@@ -41,11 +47,9 @@ export default function MarkdownRenderer({ content }: { content: string }) {
       />
     ),
     code: ({ inline, className, children, ...props }: any) => {
-      // Manual detection of inline code if the inline prop isn't reliable
       const content = String(children).replace(/\n$/, "");
-      // If there's no className and the content doesn't contain line breaks,
-      // or if inline is explicitly true, treat it as inline code
       const isInline = inline || (!className && !content.includes("\n"));
+
       if (isInline) {
         return (
           <code
@@ -56,42 +60,21 @@ export default function MarkdownRenderer({ content }: { content: string }) {
           </code>
         );
       }
+
       const match = /language-(\w+)/.exec(className || "");
       const language = match ? match[1] : "";
+
       return (
-        <div className="rounded-md overflow-hidden">
-          <div className="bg-zinc-900 text-zinc-400 text-xs px-4 py-1.5 flex justify-between items-center">
-            <span>{language || "plain text"}</span>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(content);
-              }}
-              className="hover:text-white text-xs"
-            >
-              Copy
-            </button>
-          </div>
-          <SyntaxHighlighter
-            style={oneDark}
-            language={language}
-            PreTag="div"
-            className="rounded-b-md w-full overflow-x-auto"
-            showLineNumbers
-            customStyle={{
-              margin: 0,
-              borderRadius: "0 0 0.375rem 0.375rem",
-              fontSize: "0.9em",
-            }}
-            {...props}
-          >
-            {content}
-          </SyntaxHighlighter>
-        </div>
+        <TomeSyntaxHighlighter
+          content={content}
+          language={language}
+          {...props}
+        />
       );
     },
     img: (props: ComponentProps<"img">) => (
       <img
-        className="max-w-full rounded-md  mx-auto"
+        className="max-w-full rounded-md mx-auto"
         {...props}
         alt={props.alt || ""}
       />
@@ -134,5 +117,54 @@ export default function MarkdownRenderer({ content }: { content: string }) {
     <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
       {content}
     </ReactMarkdown>
+  );
+}
+
+interface TomeSyntaxHighlighterProps {
+  content: string;
+  language: string;
+  className?: string;
+  showLineNumbers?: boolean;
+  showCopyButton?: boolean;
+}
+
+export function TomeSyntaxHighlighter({
+  content,
+  language,
+  className = "",
+  showLineNumbers = true,
+  showCopyButton = true,
+  ...props
+}: TomeSyntaxHighlighterProps) {
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content);
+  };
+
+  return (
+    <div className="rounded-md overflow-hidden">
+      <div className="bg-zinc-900 text-zinc-400 text-xs px-4 py-1.5 flex justify-between items-center">
+        <span>{language || "plain text"}</span>
+        {showCopyButton && (
+          <button onClick={handleCopy} className="hover:text-white text-xs">
+            Copy
+          </button>
+        )}
+      </div>
+      <SyntaxHighlighter
+        style={oneDark}
+        language={language}
+        PreTag="div"
+        className={`rounded-b-md w-full overflow-x-auto ${className}`}
+        showLineNumbers={showLineNumbers}
+        customStyle={{
+          margin: 0,
+          borderRadius: "0 0 0.375rem 0.375rem",
+          fontSize: "0.9em",
+        }}
+        {...props}
+      >
+        {content}
+      </SyntaxHighlighter>
+    </div>
   );
 }

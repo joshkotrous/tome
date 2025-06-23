@@ -1,20 +1,24 @@
 import {
   ArrowUp,
+  Check,
+  ChevronRight,
+  Database,
+  FileCode,
   MessageCircle,
   MessageCirclePlus,
+  Plus,
   SidebarClose,
   Trash,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { SetStateAction, useEffect, useMemo, useState } from "react";
+import { SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { cn, displayDate } from "@/lib/utils";
-import { useAgent } from "@/useAgent";
 import Spinner from "./ui/spinner";
-import MarkdownRenderer from "./markdownRederer";
+import MarkdownRenderer, { TomeSyntaxHighlighter } from "./markdownRederer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import ResizableContainer from "./ui/resizableContainer";
-import { Conversation, ConversationMessage } from "@/types";
+import { Conversation, TomeMessage } from "@/types";
 import { Input } from "./ui/input";
 import {
   Dialog,
@@ -27,51 +31,74 @@ import {
 import AnimatedEllipsis from "./animatedEllipsis";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { useAppData } from "@/applicationDataProvider";
+import { TomeAgentModel, TomeAgentModels } from "../../core/ai";
+import { useQueryData } from "@/queryDataProvider";
+import { AIProviderLogo } from "./toolbar";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  TomeAgentModel,
-  TomeAnthropicAgentModelObject,
-  TomeOAIAgentModel,
-  TomeOAIAgentModelObject,
-} from "../../core/ai";
+  FileUIPart,
+  ReasoningUIPart,
+  SourceUIPart,
+  StepStartUIPart,
+  TextUIPart,
+  ToolInvocationUIPart,
+} from "@ai-sdk/ui-utils";
+import { Text } from "./ui/text";
+import { AnimateEllipse } from "./animatedEllipse";
+import { useAgent } from "@/agent/useAgent";
+import { useConversationData } from "@/conversationDataProvider";
 
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  toolName: string | null;
 };
 
 export default function ChatInterface() {
   const { settings } = useAppData();
 
-  const [model, setModel] = useState<TomeAgentModel>("gpt-4o");
+  const {
+    conversations,
+    selectedConversation,
+    setSelectedConversation,
+    currentMessages,
+    refreshConversations,
+  } = useConversationData();
+
+  const [model, setModel] = useState<TomeAgentModel>({
+    provider: "Open AI",
+    name: "gpt-4o",
+  });
 
   useEffect(() => {
     setModel(
-      settings?.aiFeatures.provider === "Open AI" ? "gpt-4o" : "claude-sonnet-4"
+      settings?.aiFeatures.providers.openai.enabled
+        ? { provider: "Open AI", name: "gpt-4o" }
+        : { provider: "Anthropic", name: "claude-sonnet-4" }
     );
   }, [settings]);
 
-  const [selectedConversation, setSelectedConversation] = useState<
-    number | null
-  >(null);
   const [input, setInput] = useState("");
 
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const { messages, thinking, sendMessage, permissionNeeded, approveQuery } =
+    useAgent({
+      initialMessages: currentMessages,
+      model,
+      mode: "agent",
+      selectedConversation,
+    });
 
-  const { msgs, send, thinking } = useAgent({
-    messages,
-    setMessages,
-  });
-  async function sendMessage(msg: ChatMessage) {
-    let convo: number | null = selectedConversation;
-    if (!selectedConversation) {
-      const newConversation = await window.conversations.createConversation(
-        msg.content
-      );
-      convo = newConversation.id;
-      setSelectedConversation(newConversation.id);
-    }
-    send(msg.content, model, convo ?? undefined);
+  async function send(msg: string) {
     setInput("");
+    if (!selectedConversation) {
+      const convo = await window.conversations.createConversation(msg);
+      refreshConversations();
+      setSelectedConversation(convo);
+      await sendMessage(msg, convo.id);
+      return;
+    }
+    await sendMessage(msg);
   }
 
   const suggestions = [
@@ -94,54 +121,27 @@ export default function ChatInterface() {
     },
   ];
 
-  useEffect(() => {
-    async function getData() {
-      if (selectedConversation) {
-        const convo = await window.messages.listMessages(selectedConversation);
-        setMessages(convo);
-      } else {
-        setMessages([]);
-      }
-    }
-    getData();
-  }, [selectedConversation]);
-
   return (
-    <div className="flex flex-1 h-full min-h-0">
+    <div className="flex flex-1 h-full">
       <ConversationsList
+        refreshConversations={refreshConversations}
+        conversations={conversations}
         selectedConversation={selectedConversation}
         setSelectedConversation={setSelectedConversation}
       />
       {selectedConversation && messages.length > 0 && (
-        <div className="flex space-y-4  flex-col flex-1 h-full  pb-4 overflow-auto mx-auto w-full max-w-5xl">
-          <div className=" flex flex-col flex-1 p-4">
-            {msgs.map((i) => (
-              <div className={cn("flex", i.role === "user" && "justify-end")}>
-                <ChatMessage sendMessage={sendMessage} message={i} />
-              </div>
-            ))}
-            {thinking && <AnimatedEllipsis size="lg" />}
-          </div>
-          <div className="flex flex-col gap-2 sticky justify-center items-center w-full bottom-7 left-0 px-4">
-            <div className="max-w-2xl w-full space-y-2">
-              <div className="w-full">
-                {thinking && (
-                  <div className="flex gap-1.5 items-center text-sm">
-                    <Spinner /> Thinking...
-                  </div>
-                )}
-              </div>
-
-              <ChatInput
-                model={model}
-                onModelChange={setModel}
-                input={input}
-                setInput={setInput}
-                onSubmit={() => sendMessage({ role: "user", content: input })}
-              />
-            </div>
-          </div>
-        </div>
+        <ChatInputDisplay
+          refreshResponse={approveQuery}
+          permissionNeeded={permissionNeeded}
+          showQueryControls={false}
+          messages={messages}
+          thinking={thinking}
+          input={input}
+          setInput={setInput}
+          model={model}
+          setModel={setModel}
+          sendMessage={send}
+        />
       )}
       {!selectedConversation && (
         <div className="flex  flex-col flex-1 w-full  px-8 items-center justify-center">
@@ -151,9 +151,8 @@ export default function ChatInterface() {
           <div className="flex justify-center flex-wrap py-2 gap-1.5 ">
             {suggestions.map((i) => (
               <div
-                onClick={() =>
-                  sendMessage({ role: "user", content: i.message })
-                }
+                key={i.name}
+                onClick={() => send(i.message)}
                 className="text-xs px-2 p-1 border rounded-full bg-zinc-900 hover:bg-zinc-800 select-none transition-all"
               >
                 {i.name}
@@ -170,7 +169,7 @@ export default function ChatInterface() {
             onModelChange={setModel}
             input={input}
             setInput={setInput}
-            onSubmit={() => sendMessage({ role: "user", content: input })}
+            onSubmit={() => send(input)}
           />
         </div>
       )}
@@ -178,28 +177,302 @@ export default function ChatInterface() {
   );
 }
 
+export function ChatInputDisplay({
+  permissionNeeded,
+  setModel,
+  model,
+  input,
+  setInput,
+  thinking,
+  messages,
+  sendMessage,
+  showQueryControls = true,
+  refreshResponse,
+}: {
+  permissionNeeded?: boolean;
+  refreshResponse?: () => Promise<void>;
+  messages: TomeMessage[];
+  thinking: boolean;
+  setModel: React.Dispatch<SetStateAction<TomeAgentModel>>;
+  model: TomeAgentModel;
+  input: string;
+  setInput: React.Dispatch<SetStateAction<string>>;
+  sendMessage: (val: string) => Promise<void>;
+  showQueryControls: boolean;
+}) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 100,
+    overscan: 5,
+  });
+
+  useEffect(() => {
+    if (scrollContainerRef.current && messages.length > 0) {
+      const totalSize = virtualizer.getTotalSize();
+      scrollContainerRef.current.scrollTo({
+        top: totalSize,
+        behavior: "smooth",
+      });
+    }
+  }, [thinking, messages, virtualizer]);
+  return (
+    <div
+      ref={scrollContainerRef}
+      className="flex flex-col flex-1 h-full overflow-auto mx-auto w-full max-w-5xl"
+    >
+      <div className="flex flex-col flex-1 p-4 pb-6 gap-2">
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const message = messages[virtualItem.index];
+            return (
+              <div
+                key={virtualItem.key}
+                data-index={virtualItem.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                <div
+                  className={cn(
+                    "flex py-1",
+                    message.role === "user" && "justify-end"
+                  )}
+                >
+                  <ChatMessage sendMessage={sendMessage} message={message} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {thinking && <AnimatedEllipsis size="lg" />}
+      </div>
+      <div className=" flex flex-col gap-2 sticky justify-center items-center w-full bottom-0 left-0 px-4">
+        <div className="relative max-w-2xl w-full h-fit py-4">
+          <div className="px-4 w-full left-0">
+            <AnimatePresence>
+              {(thinking || permissionNeeded) && (
+                <motion.div
+                  initial={{ y: 40 }}
+                  animate={{ y: 0 }}
+                  exit={{ y: 40 }}
+                  transition={{ duration: 0.1 }}
+                  className="bg-zinc-900  w-full rounded-t-md border border-b-0 text-xs p-2 flex items-center justify-between"
+                >
+                  {thinking && <Thinking />}
+                  {permissionNeeded && (
+                    <ApproveQueryButton refreshResponse={refreshResponse} />
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <ChatInput
+            showQueryControls={showQueryControls}
+            thinking={thinking}
+            model={model}
+            onModelChange={setModel}
+            input={input}
+            setInput={setInput}
+            onSubmit={() => sendMessage(input)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ApproveQueryButton({
+  refreshResponse,
+}: {
+  refreshResponse?: () => Promise<void>;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: any) => {
+      // Check for Cmd+Shift+Enter (Mac) or Ctrl+Shift+Enter (Windows/Linux)
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.shiftKey &&
+        event.key === "Enter"
+      ) {
+        event.preventDefault();
+        if (refreshResponse) {
+          refreshResponse();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [refreshResponse]);
+
+  return (
+    <div className="w-full flex items-center justify-between">
+      <span>
+        Permission required to continue
+        <AnimateEllipse speed={300} />
+      </span>
+      <Button
+        onClick={() => {
+          if (refreshResponse) {
+            refreshResponse();
+          }
+        }}
+        size="xs"
+        className="bg-green-500/25 border-green-400 text-green-400 hover:bg-green-500/50 transition-all !p-1 !px-2 !h-fit !text-[10px]"
+      >
+        Run Query ⌘⇧↵
+      </Button>
+    </div>
+  );
+}
+
+export function DatabaseSwitcher() {
+  const { connections, currentConnection, setCurrentConnection } =
+    useQueryData();
+
+  return (
+    <Tooltip delayDuration={700}>
+      <Select
+        value={currentConnection?.id?.toString()}
+        onValueChange={(value) => {
+          const selectedConnection = connections.find(
+            (c) => c.id.toString() === value
+          );
+          if (selectedConnection) {
+            setCurrentConnection(selectedConnection);
+          }
+        }}
+      >
+        <TooltipTrigger>
+          <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900">
+            <Database className="size-3" />
+            {currentConnection?.name}
+          </SelectTrigger>
+        </TooltipTrigger>
+
+        <SelectContent className="dark">
+          {connections.map((connection) => (
+            <SelectItem key={connection.id} value={connection.id.toString()}>
+              {connection.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <TooltipContent>Switch database</TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function QuerySwitcher() {
+  const {
+    queries,
+    currentQuery,
+    setCurrentQuery,
+    currentConnection,
+    createQuery,
+  } = useQueryData();
+  if (!currentQuery) return null;
+  return (
+    <Tooltip delayDuration={700}>
+      <Select
+        value={currentQuery?.id?.toString()}
+        onValueChange={(value) => {
+          if (value === "new") {
+            if (!currentConnection) return;
+            createQuery({
+              connection: currentConnection?.id,
+              createdAt: new Date(),
+              query: "",
+              title: "untitled",
+            });
+          }
+          const selectedQuery = queries.find((q) => q.id.toString() === value);
+          if (selectedQuery) {
+            setCurrentQuery(selectedQuery);
+          }
+        }}
+      >
+        <TooltipTrigger>
+          <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900">
+            <FileCode className="size-3" />
+            {currentQuery?.title}
+          </SelectTrigger>
+        </TooltipTrigger>
+
+        <SelectContent className="dark">
+          {queries.map((query) => (
+            <SelectItem key={query.id} value={query.id.toString()}>
+              {query.title}
+            </SelectItem>
+          ))}
+          <SelectItem value="new">
+            <Plus /> New query
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      <TooltipContent>Switch query</TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function Thinking({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex gap-1.5 items-center text-xs", className)}>
+      <Spinner className="size-3" /> Thinking...
+    </div>
+  );
+}
+
 function ConversationsList({
+  conversations,
   selectedConversation,
   setSelectedConversation,
+  refreshConversations,
 }: {
-  selectedConversation: number | null;
-  setSelectedConversation: React.Dispatch<SetStateAction<number | null>>;
+  conversations: Conversation[];
+  selectedConversation: Conversation | null;
+  refreshConversations: () => void;
+  setSelectedConversation: React.Dispatch<SetStateAction<Conversation | null>>;
 }) {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [open, setOpen] = useState(true);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top when conversations change and we're adding to the beginning
+  useEffect(() => {
+    if (scrollContainerRef.current && conversations.length > 0) {
+      // If the first conversation is very recent (within last 5 seconds), scroll to top
+      const firstConversation = conversations[0];
+      const now = new Date();
+      const conversationAge =
+        now.getTime() - new Date(firstConversation.createdAt).getTime();
+
+      if (conversationAge < 5000) {
+        // 5 seconds
+        scrollContainerRef.current.scrollTop = 0;
+      }
+    }
+  }, [conversations.length]);
 
   function handleOpen() {
     setOpen((open) => !open);
   }
-
-  async function getData() {
-    const convos = await window.conversations.listConversations();
-    setConversations(convos);
-  }
-
-  useEffect(() => {
-    getData();
-  }, []);
 
   return (
     <ResizableContainer
@@ -246,8 +519,11 @@ function ConversationsList({
         {open && <Input placeholder="Search..." />}
       </div>
 
-      {/* Scrollable Content - This is the key fix */}
-      <div className="flex-1 overflow-y-auto flex flex-col gap-1.5 p-2 min-h-0">
+      {/* Scrollable Content - Add ref here */}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto flex flex-col gap-1.5 p-2 min-h-0"
+      >
         {open && !selectedConversation && (
           <div
             className={cn(
@@ -259,30 +535,94 @@ function ConversationsList({
         )}
         {open &&
           conversations.map((i) => (
-            <div
+            <ConversationListItem
               key={i.id}
-              onClick={() => setSelectedConversation(i.id)}
-              className={cn(
-                "rounded-sm text-zinc-400 p-1 gap-2 px-4 pr-1 items-center text-sm hover:bg-zinc-800 select-none transition-all flex flex-shrink-0",
-                selectedConversation === i.id && "bg-zinc-800 text-white"
-              )}
-            >
-              <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
-                {i.name}
-              </span>
-              <span className="text-xs flex-shrink-0">
-                {displayDate(i.createdAt)}
-              </span>
-              <div className="flex-shrink-0">
-                <DeleteConversation
-                  onComplete={async () => await getData()}
-                  conversation={i}
-                />
-              </div>
-            </div>
+              conversation={i}
+              refreshConversations={refreshConversations}
+              selectedConversation={selectedConversation}
+              setSelectedConversation={setSelectedConversation}
+            />
           ))}
       </div>
     </ResizableContainer>
+  );
+}
+
+function ConversationListItem({
+  selectedConversation,
+  setSelectedConversation,
+  conversation,
+  refreshConversations,
+}: {
+  selectedConversation: Conversation | null;
+  setSelectedConversation: React.Dispatch<SetStateAction<Conversation | null>>;
+  conversation: Conversation;
+  refreshConversations: () => void;
+}) {
+  const [name, setName] = useState(conversation.name);
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    let isCancelled = false;
+
+    const pollForName = async () => {
+      try {
+        const updatedConversation = await window.conversations.getConversation(
+          conversation.id
+        );
+
+        if (!isCancelled && updatedConversation?.name) {
+          setName(updatedConversation.name);
+          if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+          }
+        }
+      } catch (error) {
+        console.error("Error polling for conversation name:", error);
+      }
+    };
+
+    // If name is not present, start polling
+    if (!conversation.name) {
+      // Try immediately first
+      pollForName();
+
+      // Then poll every 2 seconds until name is found
+      intervalId = setInterval(pollForName, 2000);
+    }
+
+    // Cleanup function
+    return () => {
+      isCancelled = true;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [conversation.id, conversation.name]);
+
+  return (
+    <div
+      key={conversation.id}
+      onClick={() => setSelectedConversation(conversation)}
+      className={cn(
+        "rounded-sm text-zinc-400 p-1 gap-2 px-4 pr-1 items-center text-sm hover:bg-zinc-800 select-none transition-all flex flex-shrink-0",
+        selectedConversation?.id === conversation.id && "bg-zinc-800 text-white"
+      )}
+    >
+      <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
+        {name || <Text variant="shine">Generating...</Text>}
+      </span>
+      <span className="text-xs flex-shrink-0">
+        {displayDate(conversation.createdAt)}
+      </span>
+      <div className="flex-shrink-0">
+        <DeleteConversation
+          onComplete={() => refreshConversations()}
+          conversation={conversation}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -332,12 +672,15 @@ function ChatInput({
   onSubmit,
   model,
   onModelChange,
+  showQueryControls,
 }: {
   model: TomeAgentModel;
   onModelChange: React.Dispatch<SetStateAction<TomeAgentModel>>;
   input: string;
   setInput: React.Dispatch<SetStateAction<string>>;
   onSubmit: () => void;
+  thinking?: boolean;
+  showQueryControls?: boolean;
 }) {
   const handleSubmit = () => {
     if (input.trim()) {
@@ -347,36 +690,46 @@ function ChatInput({
   };
 
   return (
-    <div className="bg-zinc-900 rounded-md border p-2 flex items-end gap-2 w-full max-w-2xl">
-      <div className="w-full">
-        <ModelPicker model={model} onModelChange={onModelChange} />
-        <Textarea
-          placeholder="Enter a message..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          className="font-medium border-none bg-zinc-900 dark:bg-input/0"
-          onKeyDown={(e) => {
-            // Handle Cmd+Enter only within the textarea
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              handleSubmit();
-            }
-          }}
-        />
-      </div>
+    <div className="bg-zinc-900 rounded-md border p-2 flex items-end gap-2 w-full max-w-2xl relative z-50">
+      <div className="w-full flex flex-col gap-2">
+        {showQueryControls && (
+          <div className="w-full flex gap-1.5">
+            <QuerySwitcher />
+            <DatabaseSwitcher />
+          </div>
+        )}
 
-      <Tooltip delayDuration={1000}>
-        <TooltipTrigger>
-          <Button
-            onClick={handleSubmit}
-            variant="secondary"
-            className="rounded-full has-[>svg]:p-2 h-fit"
-          >
-            <ArrowUp className="stroke-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>⌘ ↵ </TooltipContent>
-      </Tooltip>
+        <div className="flex items-center gap-2">
+          <ModelPicker model={model} onModelChange={onModelChange} />
+        </div>
+        <div className="flex items-end gap-2">
+          <Textarea
+            placeholder="Enter a message..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="font-medium border-none bg-zinc-900 dark:bg-input/0 h-20 text-sm"
+            onKeyDown={(e) => {
+              // Handle Cmd+Enter only within the textarea
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+          />
+          <Tooltip delayDuration={1000}>
+            <TooltipTrigger>
+              <Button
+                onClick={handleSubmit}
+                variant="secondary"
+                className="rounded-full has-[>svg]:p-2 h-fit"
+              >
+                <ArrowUp className="stroke-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>⌘ ↵ </TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
     </div>
   );
 }
@@ -390,128 +743,267 @@ function ModelPicker({
 }) {
   const { settings } = useAppData();
 
+  // Get available models based on enabled providers
+  const getAvailableModels = () => {
+    if (!settings) return [];
+
+    const { openai, anthropic } = settings.aiFeatures.providers;
+
+    // If both providers are enabled, show all models
+    if (openai.enabled && anthropic.enabled) {
+      return TomeAgentModels;
+    }
+
+    // If only OpenAI is enabled, show OpenAI models
+    if (openai.enabled && !anthropic.enabled) {
+      return TomeAgentModels.filter((model) => model.provider === "Open AI");
+    }
+
+    // If only Anthropic is enabled, show Anthropic models
+    if (!openai.enabled && anthropic.enabled) {
+      return TomeAgentModels.filter((model) => model.provider === "Anthropic");
+    }
+
+    // If neither provider is enabled, return empty array
+    return [];
+  };
+
+  const availableModels = getAvailableModels();
+
+  // Check if the current model is still available
+  const isCurrentModelAvailable = availableModels.some(
+    (availableModel) => availableModel.name === model.name
+  );
+
+  // Group models by provider for better organization when both providers are enabled
+  const groupedModels = useMemo(() => {
+    if (availableModels.length === 0) return {};
+
+    return availableModels.reduce((groups, model) => {
+      const provider = model.provider;
+      if (!groups[provider]) {
+        groups[provider] = [];
+      }
+      groups[provider].push(model);
+      return groups;
+    }, {} as Record<string, TomeAgentModel[]>);
+  }, [availableModels]);
+
+  // If current model is not available, auto-select the first available model
+  useEffect(() => {
+    if (!isCurrentModelAvailable && availableModels.length > 0) {
+      onModelChange(availableModels[0]);
+    }
+  }, [isCurrentModelAvailable, availableModels, onModelChange]);
+
+  // Early returns after all hooks have been called
   if (!settings) return null;
 
-  const models =
-    settings.aiFeatures.provider === "Open AI"
-      ? TomeOAIAgentModelObject.options
-      : TomeAnthropicAgentModelObject.options;
+  // If no models are available, show a disabled state
+  if (availableModels.length === 0) {
+    return (
+      <Select disabled>
+        <SelectTrigger className="border !bg-zinc-950/40 !p-0 !h-fit !p-1 !px-2 text-xs opacity-50">
+          No models available
+        </SelectTrigger>
+      </Select>
+    );
+  }
+
+  const shouldGroupByProvider = Object.keys(groupedModels).length > 1;
 
   return (
     <Select
-      value={model}
-      onValueChange={(val: TomeOAIAgentModel) => onModelChange(val)}
+      value={model.name}
+      onValueChange={(val: string) => {
+        const selectedModel = TomeAgentModels.find((i) => i.name === val);
+        if (selectedModel) {
+          onModelChange(selectedModel);
+        }
+      }}
     >
-      <SelectTrigger className="border-none">{model}</SelectTrigger>
+      <SelectTrigger className="border !bg-zinc-950/40 !p-0 !h-fit !p-1 !px-2 text-xs">
+        <AIProviderLogo className="size-3.5" provider={model.provider} />
+        {model.name}
+      </SelectTrigger>
       <SelectContent className="dark">
-        {models.map((i) => (
-          <SelectItem value={i}> {i}</SelectItem>
-        ))}
+        {shouldGroupByProvider
+          ? // Group models by provider when both are available
+            Object.entries(groupedModels).map(([provider, models]) => (
+              <div key={provider}>
+                <div className="px-2 py-1.5 text-xs font-medium text-zinc-400 bg-zinc-800/50">
+                  {provider}
+                </div>
+                {models.map((model) => (
+                  <SelectItem key={model.name} value={model.name}>
+                    <div className="flex items-center gap-2">
+                      <AIProviderLogo
+                        className="size-3"
+                        provider={model.provider}
+                      />
+                      {model.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </div>
+            ))
+          : // Show flat list when only one provider is enabled
+            availableModels.map((model) => (
+              <SelectItem key={model.name} value={model.name}>
+                <div className="flex items-center gap-2">
+                  <AIProviderLogo
+                    className="size-3"
+                    provider={model.provider}
+                  />
+                  {model.name}
+                </div>
+              </SelectItem>
+            ))}
       </SelectContent>
     </Select>
   );
 }
 
-function parseUIAction(response: string) {
-  // Check if response is valid
-  if (!response || typeof response !== "string") {
-    return { message: "", action: null };
+function toolDisplay(
+  part:
+    | TextUIPart
+    | ReasoningUIPart
+    | ToolInvocationUIPart
+    | SourceUIPart
+    | FileUIPart
+    | StepStartUIPart
+) {
+  if (part.type !== "tool-invocation") {
+    return;
   }
 
-  // Look for the last occurrence of <ui_action> tag
-  const actionMatch = response.match(/<ui_action>(.*?)<\/ui_action>\s*$/);
+  const { state, toolName } = part.toolInvocation;
 
-  if (actionMatch) {
-    // Extract the action content
-    const action = actionMatch[1].trim();
-
-    // Remove the ui_action tag from the message
-    const message = response
-      .replace(/<ui_action>.*?<\/ui_action>\s*$/, "")
-      .trim();
-
-    return {
-      message: message.trim(),
-
-      action: action,
-    };
+  if (toolName === "getSchema") {
+    if (state === "partial-call") {
+      return (
+        <Text className="text-xs" variant="shine">
+          Getting schema...
+        </Text>
+      );
+    }
+    return "Retrieved schema";
   }
 
-  return {
-    message: response.trim(),
+  if (toolName === "updateQuery") {
+    if (state === "partial-call") {
+      return (
+        <Text className="text-xs" variant="shine">
+          Updating query...
+        </Text>
+      );
+    }
+    return "Updated query";
+  }
 
-    action: null,
-  };
+  if (toolName === "runQuery") {
+    if (state === "partial-call") {
+      return (
+        <Text className="text-xs" variant="shine">
+          Running query...
+        </Text>
+      );
+    }
+
+    return "Ran query";
+  }
+
+  if (toolName === "askForPermission") {
+    if (state === "partial-call") {
+      return "Awaiting permission to continue...";
+    }
+
+    return "Permission received";
+  }
 }
 
 function ChatMessage({
   message,
-  sendMessage,
 }: {
-  message: Omit<ConversationMessage, "id">;
-  sendMessage: (v: ChatMessage) => void;
+  message: Omit<TomeMessage, "id">;
+  sendMessage: (v: string) => void;
 }) {
-  const { thinking } = useAgent();
   const fromUser = message.role === "user";
 
-  const { message: cleanedMessage, action } = useMemo(() => {
-    return parseUIAction(message.content);
-  }, [message.content]);
+  const [queryPreviewOpen, setQueryPreviewOpen] = useState(false);
 
   return (
     <div
       className={cn(
         "overflow-auto max-w-xl",
-        fromUser ? "items-end" : "items-start"
+        fromUser ? "items-end py-4" : "items-start"
       )}
     >
-      <span
-        className={cn(
-          "py-2 w-full flex text-xs text-zinc-400 capitalize",
-          fromUser && "justify-end "
-        )}
-      >
-        {message.role}
-      </span>
-      <div
-        className={cn(
-          "rounded-lg px-4 py-3 whitespace-pre-wrap break-words",
-          fromUser ? "bg-zinc-600 text-white" : "bg-zinc-800 text-zinc-100"
-        )}
-      >
-        <MarkdownRenderer content={cleanedMessage} />
-        {thinking && (
-          <div className="flex gap-1.5 items-center">
-            <Spinner /> Thinking...
+      {message.role === "assistant" &&
+        message.parts
+          .filter((i) => i.type === "tool-invocation")
+          .map((k, index) => (
+            <div
+              key={index}
+              className="border p-2 rounded-sm bg-zinc-900/75 w-fit my-1"
+            >
+              <div className="flex gap-1.5 items-center text-xs text-zinc-400">
+                {k.toolInvocation.state === "partial-call" &&
+                  k.toolInvocation.toolName === "askForPermission" && (
+                    <Spinner className="size-3.5" />
+                  )}
+                {k.toolInvocation.state === "result" && (
+                  <Check className="size-3.5 text-green-500" />
+                )}
+                {toolDisplay(k)}
+              </div>
+              {k.toolInvocation.toolName === "askForPermission" &&
+                k.toolInvocation.args?.query && (
+                  <div className="mt-2 space-y-2 flex flex-1 flex-col overflow-auto">
+                    <div
+                      onClick={() => setQueryPreviewOpen((prev) => !prev)}
+                      className="flex items-center gap-0.5 text-xs text-zinc-500 hover:text-zinc-300 transition-all cursor-default select-none"
+                    >
+                      <ChevronRight
+                        className={cn(
+                          "size-3.5",
+                          queryPreviewOpen && "rotate-90"
+                        )}
+                      />{" "}
+                      View Query
+                    </div>
+                    {queryPreviewOpen && (
+                      <TomeSyntaxHighlighter
+                        content={k.toolInvocation.args.query}
+                        language="sql"
+                        showLineNumbers={false}
+                      />
+                    )}
+                  </div>
+                )}
+            </div>
+          ))}
+
+      {message.content.trim() !== "" && (
+        <>
+          <span
+            className={cn(
+              "pb-2 w-full flex text-xs text-zinc-400 capitalize",
+              fromUser && "justify-end "
+            )}
+          >
+            {message.role}
+          </span>
+          <div
+            className={cn(
+              "rounded-lg px-4 py-3 whitespace-pre-wrap break-words",
+              fromUser ? "bg-zinc-600 text-white" : "bg-zinc-800 text-zinc-100"
+            )}
+          >
+            <MarkdownRenderer content={message.content} />
           </div>
-        )}
-        <UIAction sendMessage={sendMessage} action={action} />
-      </div>
+        </>
+      )}
     </div>
   );
-}
-
-function UIAction({
-  action,
-  sendMessage,
-}: {
-  action: string | null;
-  sendMessage: (v: ChatMessage) => void;
-}) {
-  if (action === "approve-query") {
-    return (
-      <div className="py-2 w-full flex justify-end">
-        <Button
-          className="bg-green-700/50 hover:bg-green-700/25 border border-green-500 text-green-400"
-          onClick={() =>
-            sendMessage({ role: "user", content: "Run the query" })
-          }
-        >
-          Run Query
-        </Button>
-      </div>
-    );
-  }
-
-  return null;
 }

@@ -69,7 +69,7 @@ export default function TomeLogo({ className }: { className?: string }) {
           <path
             d="M66.4193 12.7422H13.0298C6.36033 12.7422 0.953613 18.1471 0.953613 24.8143V78.1857C0.953613 84.8528 6.36033 90.2578 13.0298 90.2578H66.4193C73.0886 90.2578 78.4955 84.8528 78.4955 78.1857V24.8143C78.4955 18.1471 73.0886 12.7422 66.4193 12.7422Z"
             stroke="url(#paint2_linear_31_4)"
-            stroke-width="5"
+            strokeWidth="5"
           />
         </g>
       </g>
@@ -85,9 +85,9 @@ export default function TomeLogo({ className }: { className?: string }) {
           width="104.742"
           height="104.716"
           filterUnits="userSpaceOnUse"
-          color-interpolation-filters="sRGB"
+          colorInterpolationFilters="sRGB"
         >
-          <feFlood flood-opacity="0" result="BackgroundImageFix" />
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
           <feColorMatrix
             in="SourceAlpha"
             type="matrix"
@@ -120,9 +120,9 @@ export default function TomeLogo({ className }: { className?: string }) {
           width="102.311"
           height="108.163"
           filterUnits="userSpaceOnUse"
-          color-interpolation-filters="sRGB"
+          colorInterpolationFilters="sRGB"
         >
-          <feFlood flood-opacity="0" result="BackgroundImageFix" />
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
           <feBlend
             mode="normal"
             in="SourceGraphic"
@@ -141,9 +141,9 @@ export default function TomeLogo({ className }: { className?: string }) {
           width="103.117"
           height="106.59"
           filterUnits="userSpaceOnUse"
-          color-interpolation-filters="sRGB"
+          colorInterpolationFilters="sRGB"
         >
-          <feFlood flood-opacity="0" result="BackgroundImageFix" />
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
           <feBlend
             mode="normal"
             in="SourceGraphic"
@@ -162,9 +162,9 @@ export default function TomeLogo({ className }: { className?: string }) {
           width="79.7182"
           height="86.6898"
           filterUnits="userSpaceOnUse"
-          color-interpolation-filters="sRGB"
+          colorInterpolationFilters="sRGB"
         >
-          <feFlood flood-opacity="0" result="BackgroundImageFix" />
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
           <feColorMatrix
             in="SourceAlpha"
             type="matrix"
@@ -198,8 +198,8 @@ export default function TomeLogo({ className }: { className?: string }) {
           y2="91.1314"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0.115385" stop-color="white" stop-opacity="0" />
-          <stop offset="0.75" stop-color="white" stop-opacity="0.87" />
+          <stop offset="0.115385" stopColor="white" stopOpacity="0" />
+          <stop offset="0.75" stopColor="white" stopOpacity="0.87" />
         </linearGradient>
         <linearGradient
           id="paint1_linear_31_4"
@@ -209,8 +209,8 @@ export default function TomeLogo({ className }: { className?: string }) {
           y2="80.886"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stop-color="white" />
-          <stop offset="1" stop-color="#767676" />
+          <stop stopColor="white" />
+          <stop offset="1" stopColor="#767676" />
         </linearGradient>
         <linearGradient
           id="paint2_linear_31_4"
@@ -220,8 +220,8 @@ export default function TomeLogo({ className }: { className?: string }) {
           y2="91.2109"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stop-color="white" />
-          <stop offset="1" stop-color="#313131" />
+          <stop stopColor="white" />
+          <stop offset="1" stopColor="#313131" />
         </linearGradient>
       </defs>
     </svg>

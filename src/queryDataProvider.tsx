@@ -3,28 +3,38 @@ import React, {
   SetStateAction,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
-import { Database } from "./types";
-import { JsonQueryResult } from "core/database";
-
-export type Query = { id: string; connection: Database; query: string };
+import { JsonQueryResult } from "core/connections";
+import { TomeMessage, Connection, Query } from "./types";
 
 interface QueryDataContextValue {
-  currentQuery: string | null;
-  setCurrrentQuery: React.Dispatch<SetStateAction<string | null>>;
+  connections: Connection[];
+  currentQuery: Query | null;
+  setCurrentQuery: React.Dispatch<SetStateAction<Query | null>>;
   queries: Query[];
   queryResult: JsonQueryResult | null;
   loadingQuery: boolean;
   error: string | null;
   refreshQuery: () => Promise<void>;
+  queryMessages: TomeMessage[];
   runQuery: (
-    query: Query
+    connection: Connection,
+    query: string
   ) => Promise<JsonQueryResult | undefined | { error: string }>;
-  createQuery: (query: Query) => void;
+  createQuery: (query: Omit<Query, "id">) => Promise<Query>;
   deleteQuery: (query: Query) => void;
   updateQuery: (updatedQuery: Query) => void;
+  refreshQueries: () => void;
+  currentConnection: Connection | null;
+  setCurrentConnection: React.Dispatch<SetStateAction<Connection | null>>;
+  connected: Connection[];
+  loadingDb: boolean;
+  connect: (db: Connection) => Promise<Connection | null>;
+  disconnect: (db: Connection) => Promise<void>;
+  setError: React.Dispatch<SetStateAction<string | null>>;
 }
 
 const QueryDataContext = createContext<QueryDataContextValue | undefined>(
@@ -32,20 +42,27 @@ const QueryDataContext = createContext<QueryDataContextValue | undefined>(
 );
 
 export function QueryDataProvider({ children }: { children: React.ReactNode }) {
-  const [currentQuery, setCurrrentQuery] = useState<string | null>(null);
+  const [connected, setConnected] = useState<Connection[]>([]);
+
+  const [currentQuery, setCurrentQuery] = useState<Query | null>(null);
+  const [currentConnection, setCurrentConnection] = useState<Connection | null>(
+    null
+  );
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [queries, setQueries] = useState<Query[]>([]);
   const [loadingQuery, setLoadingQuery] = useState(false);
   const [queryResult, setQueryResult] = useState<JsonQueryResult | null>(null);
+  const [queryMessages, setQueryMessages] = useState<TomeMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loadingDb, setLoadingDb] = useState(false);
 
-  const runQuery = useCallback(async (query: Query) => {
-    setCurrrentQuery(query.id);
+  const runQuery = useCallback(async (conn: Connection, query: string) => {
     setLoadingQuery(true);
     // setQueryResult(null);
     setError(null);
     try {
-      const result = await window.db.query(query.connection, query.query);
-      console.log("QUERY RESULT", JSON.stringify(result));
+      const connection = await window.connections.getConnection(conn.id);
+      const result = await window.connections.query(connection, query);
       const clonedResult = JSON.parse(JSON.stringify(result));
 
       setQueryResult(clonedResult);
@@ -60,39 +77,123 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshQuery = useCallback(async () => {
-    if (currentQuery) {
-      const query = queries.find((i) => i.id === currentQuery);
-      if (query) {
-        await runQuery(query);
-      }
+    if (currentQuery && currentConnection) {
+      await runQuery(currentConnection, currentQuery.query);
     }
   }, [currentQuery, runQuery]);
 
-  const createQuery = useCallback((query: Query) => {
-    setQueries((queries) => [...queries, query]);
-    setCurrrentQuery(query.id);
+  const createQuery = useCallback(async (query: Omit<Query, "id">) => {
+    const _query = await window.queries.createQuery(query);
+    const _connection = await window.connections.getConnection(
+      _query.connection
+    );
+    setCurrentConnection(_connection);
+    setCurrentQuery(_query);
+    refreshQueries();
+    return _query;
   }, []);
 
-  const deleteQuery = useCallback((queryToDelete: Query) => {
-    setQueries((queries) => queries.filter((query) => query !== queryToDelete));
+  const deleteQuery = useCallback(async (queryToDelete: Query) => {
+    await window.queries.deleteQuery(queryToDelete.id);
+    refreshQueries();
     // If the deleted query was the current query, clear it
-    setCurrrentQuery((current) => {
-      return current === queryToDelete.id ? null : current;
+
+    setCurrentQuery((current) => {
+      return current?.id === queryToDelete.id ? queries[0] : current;
     });
   }, []);
 
-  const updateQuery = useCallback((updatedQuery: Query) => {
-    setQueries((queries) =>
-      queries.map((query) =>
-        query.id === updatedQuery.id ? updatedQuery : query
-      )
-    );
+  const updateQuery = useCallback(async (updatedQuery: Query) => {
+    await window.queries.updateQuery(updatedQuery.id, updatedQuery);
+    refreshQueries();
   }, []);
+
+  const connect = useCallback(
+    async (db: Connection) => {
+      // already connected?
+      if (connected.some((c) => c.id === db.id)) return db;
+
+      setLoadingDb(true);
+      try {
+        await window.connections.connect(db); // IPC bridge
+        setConnected((prev) => [...prev, db]); // add to list
+        setError(null);
+        return db;
+      } catch (err: any) {
+        console.error("DB connect failed:", err);
+        setError(err?.message ?? "Unknown error");
+        return null;
+      } finally {
+        setLoadingDb(false);
+      }
+    },
+    [connected]
+  );
+
+  const disconnect = useCallback(
+    async (db: Connection) => {
+      if (!connected.some((c) => c.id === db.id)) return;
+
+      setLoadingDb(true);
+      try {
+        await window.connections.disconnect(db); // pass which DB to close
+        setConnected((prev) => prev.filter((c) => c.id !== db.id));
+        setError(null);
+      } catch (err: any) {
+        console.error("DB disconnect failed:", err);
+        setError(err?.message ?? "Unknown error");
+      } finally {
+        setLoadingDb(false);
+      }
+    },
+    [connected]
+  );
+
+  async function getData() {
+    const _queries = await window.queries.listQueries();
+    setQueries(_queries);
+    const _connections = await window.connections.listConnections();
+    setConnections(_connections);
+
+    return _queries;
+  }
+
+  const refreshQueries = useCallback(async () => {
+    await getData();
+  }, []);
+
+  async function init() {
+    const _queries = await getData();
+    if (!currentQuery) {
+      setCurrentQuery(_queries[0]);
+    }
+  }
+
+  useEffect(() => {
+    init();
+  }, []);
+
+  useEffect(() => {
+    async function getQueryData() {
+      if (currentQuery) {
+        const conn = connections.find((i) => i.id === currentQuery.connection);
+        if (conn) {
+          setCurrentConnection(conn);
+        }
+        const _messages = await window.messages.listMessages(
+          undefined,
+          currentQuery.id
+        );
+        setQueryMessages(_messages);
+      }
+    }
+    getQueryData();
+  }, [currentQuery]);
 
   const value = useMemo(
     () => ({
       currentQuery,
-      setCurrrentQuery,
+      setCurrentQuery,
       queries,
       loadingQuery,
       queryResult,
@@ -102,10 +203,21 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
       deleteQuery,
       error,
       updateQuery,
+      refreshQueries,
+      currentConnection,
+      queryMessages,
+      loadingDb,
+      connect,
+      disconnect,
+      connected,
+      setError,
+      connections,
+      setCurrentConnection,
     }),
     [
       currentQuery,
-      setCurrrentQuery,
+      connections,
+      setCurrentQuery,
       queries,
       loadingQuery,
       queryResult,
@@ -115,6 +227,14 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
       deleteQuery,
       error,
       updateQuery,
+      refreshQueries,
+      currentConnection,
+      queryMessages,
+      loadingDb,
+      connect,
+      disconnect,
+      connected,
+      setError,
     ]
   );
 

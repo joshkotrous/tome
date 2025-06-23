@@ -1,7 +1,6 @@
 import {
   ArchiveRestore,
   ChevronRight,
-  CircleCheck,
   Columns,
   DatabaseBackup,
   Database as DatabaseIcon,
@@ -9,6 +8,7 @@ import {
   Loader2,
   Pencil,
   Plug,
+  RefreshCcw,
   SidebarClose,
   Table,
   Trash,
@@ -19,7 +19,18 @@ import {
 import { Button } from "./ui/button";
 import { SetStateAction, useEffect, useRef, useState } from "react";
 import ResizableContainer from "./ui/resizableContainer";
-import { Database, DatabaseEngine } from "@/types";
+import {
+  Connection,
+  ConnectionSchema,
+  DatabaseEngine,
+  IndexJob,
+  DatabaseSchema,
+  SchemaDef,
+  TableSchema,
+  Column,
+  Schema,
+  Table as TableType,
+} from "@/types";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -41,17 +52,31 @@ import {
   DialogDescription,
   DialogTitle,
 } from "./ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, parseBool } from "@/lib/utils";
 import PostgresLogo from "./logos/postgres";
-import { useDB } from "@/databaseConnectionProvider";
 import Spinner from "./ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Kbd } from "./toolbar";
 import { useAppData } from "@/applicationDataProvider";
-import { ColumnDef, TableDef } from "core/database";
+import { useQueryData } from "@/queryDataProvider";
+
+// Add a discriminated union for selected entity
+type SelectedEntity =
+  | { type: "connection"; value: Connection }
+  | { type: "schema"; value: Schema }
+  | { type: "table"; value: TableType }
+  | { type: "column"; value: Column }
+  | null;
 
 export default function Sidebar() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(
+    parseBool(localStorage.getItem("sidebarOpen"))
+  );
+  const [selectedEntity, setSelectedEntity] = useState<SelectedEntity>(null);
+
+  useEffect(() => {
+    localStorage.setItem("sidebarOpen", String(open));
+  }, [open]);
 
   function handleOpen() {
     setOpen((open) => !open);
@@ -79,7 +104,7 @@ export default function Sidebar() {
       snapThreshold={60}
       isCollapsed={!open}
       onCollapsedChange={(collapsed) => setOpen(!collapsed)}
-      className="bg-zinc-900 border border-zinc-800 h-full rounded-r-md"
+      className="bg-zinc-900 border border-zinc-800 h-full flex flex-col"
       collapsedSize={40}
     >
       {open && (
@@ -108,13 +133,20 @@ export default function Sidebar() {
         </Tooltip>
       </div>
 
-      {open && <ConnectionList />}
+      <div className="flex-1 min-h-0 overflow-auto">
+        {open && <ConnectionList onSelect={setSelectedEntity} />}
+      </div>
+      {open && <SidebarDetailsPanel selected={selectedEntity} />}
     </ResizableContainer>
   );
 }
 
-function ConnectionList() {
-  const [selected, setSelected] = useState<Database | null>(null);
+function ConnectionList({
+  onSelect,
+}: {
+  onSelect: (e: SelectedEntity) => void;
+}) {
+  const [selected, setSelected] = useState<Connection | null>(null);
   const { databases } = useAppData();
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -142,6 +174,7 @@ function ConnectionList() {
             item={item}
             selected={selected}
             setSelected={setSelected}
+            onSelect={onSelect}
           />
         ))}
       </div>
@@ -153,10 +186,12 @@ function ConnectionListItem({
   item,
   selected,
   setSelected,
+  onSelect,
 }: {
-  item: Database;
-  selected: Database | null;
-  setSelected: React.Dispatch<SetStateAction<Database | null>>;
+  item: Connection;
+  selected: Connection | null;
+  setSelected: React.Dispatch<SetStateAction<Connection | null>>;
+  onSelect: (e: SelectedEntity) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -172,7 +207,10 @@ function ConnectionListItem({
             )}
           >
             <div
-              onClick={() => setSelected(item)}
+              onClick={() => {
+                setSelected(item);
+                onSelect({ type: "connection", value: item });
+              }}
               className={cn(
                 "w-full w-fit border-zinc-800 px-2 p-1 transition-all flex gap-1 items-center text-sm text-nowrap"
               )}
@@ -183,15 +221,16 @@ function ConnectionListItem({
               className={cn("size-5 text-zinc-400", open && "rotate-90")}
             />
           </div>
-          {open && <DatabaseList connection={item} />}
+          {open && <DatabaseList connection={item} onSelect={onSelect} />}
         </div>
       </ConnectionListContextMenu>
     </>
   );
 }
 
-export function DBInformation({ db }: { db: Database }) {
-  const { connected, loading } = useDB();
+export function DBInformation({ db }: { db: Connection }) {
+  const { connected, loadingDb: loading } = useQueryData();
+  const [indexJobs, setIndexJobs] = useState<IndexJob[]>([]);
 
   function displayLogo(engine: DatabaseEngine) {
     switch (engine) {
@@ -199,39 +238,63 @@ export function DBInformation({ db }: { db: Database }) {
         return <PostgresLogo className="size-3" />;
     }
   }
+
+  async function getData() {
+    const jobs = await window.jobs.listIndexJobs(db.id, "processing");
+    setIndexJobs(jobs);
+  }
+
+  useEffect(() => {
+    // Initial data fetch
+    getData();
+
+    // Set up interval to refresh every 3 seconds
+    const interval = setInterval(getData, 3000);
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(interval);
+  }, [db.id]); // Added db.id as dependency to restart interval if db changes
+
   return (
-    <>
+    <div className="flex items-center gap-2 pl-1">
       {loading && <Spinner />}
       {connected.some((i) => i.id === db.id) && (
+        <div className="aspect-square size-2 bg-green-500 rounded-full blur-[2px]" />
+      )}
+      {indexJobs.length > 0 && (
         <div>
-          <CircleCheck className="size-3 text-green-500" />
+          <RefreshCcw className="size-3 animate-spin text-zinc-400" />{" "}
         </div>
       )}
       {displayLogo(db.engine)}
       {db.name}
       <span className="text-zinc-400 text-xs pl-1">{db.connection.host}</span>
-    </>
+    </div>
   );
 }
 
-function DatabaseList({ connection }: { connection: Database }) {
-  const { connected } = useDB();
-  const [databases, setDatabases] = useState<string[]>([]);
+function DatabaseList({
+  connection,
+  onSelect,
+}: {
+  connection: Connection;
+  onSelect: (e: SelectedEntity) => void;
+}) {
+  const { connected } = useQueryData();
+  const [schema, setSchema] = useState<ConnectionSchema | null>(null);
   const [loading, setLoading] = useState(false);
-
   const [open, setOpen] = useState(false);
 
   async function getData() {
-    if (connected.some((i) => i.id === connection.id)) {
-      setLoading(true);
-      const dbs = await window.db.listRemoteDatabases(connection);
-      setDatabases(dbs);
-      setLoading(false);
-    }
+    setLoading(true);
+    const _schema = await window.connections.getConnectionSchema(connection.id);
+    setSchema(_schema);
+    setLoading(false);
   }
 
   useEffect(() => {
     getData();
+    // eslint-disable-next-line
   }, [connected]);
 
   return (
@@ -247,16 +310,20 @@ function DatabaseList({ connection }: { connection: Database }) {
           )}
         />
         <div className="text-sm flex gap-1 items-center">
-          <DatabaseIcon className="size-3 text-amber-500" /> Databases{" "}
+          <DatabaseIcon className="size-3 text-amber-500" /> Databases
           {loading && <Spinner className="size-3.5" />}
         </div>
       </div>
-
-      {open && (
+      {open && schema && (
         <div className="space-y-0.5 relative">
           <div className="w-0.5 h-full bg-zinc-700/50 absolute left-6"></div>
-          {databases.map((i) => (
-            <DatabaseListItem connection={connection} database={i} />
+          {schema.databases.map((db) => (
+            <DatabaseListItem
+              key={db.database.id}
+              database={db}
+              connection={connection}
+              onSelect={onSelect}
+            />
           ))}
         </div>
       )}
@@ -265,14 +332,14 @@ function DatabaseList({ connection }: { connection: Database }) {
 }
 
 function DatabaseListItem({
-  connection,
   database,
+  onSelect,
 }: {
-  connection: Database;
-  database: string;
+  database: DatabaseSchema;
+  connection: Connection;
+  onSelect: (e: SelectedEntity) => void;
 }) {
   const [open, setOpen] = useState(false);
-
   return (
     <div className={cn("px-4 space-y-0.5")}>
       <div
@@ -286,14 +353,14 @@ function DatabaseListItem({
           )}
         />
         <div className="text-sm flex gap-1 items-center">
-          <DatabaseIcon className="size-3 text-amber-500" /> {database}{" "}
+          <DatabaseIcon className="size-3 text-amber-500" />{" "}
+          {database.database.name}
         </div>
       </div>
-
       {open && (
         <div className="space-y-0.5 relative">
           <div className="w-0.5 h-full bg-zinc-700/50 absolute left-6"></div>
-          <SchemaList connection={connection} database={database} />
+          <SchemaList schemas={database.schemas} onSelect={onSelect} />
         </div>
       )}
     </div>
@@ -301,28 +368,13 @@ function DatabaseListItem({
 }
 
 function SchemaList({
-  connection,
-  database,
+  schemas,
+  onSelect,
 }: {
-  connection: Database;
-  database: string;
+  schemas: SchemaDef[];
+  onSelect: (e: SelectedEntity) => void;
 }) {
-  const [schemas, setSchemas] = useState<string[]>([]);
-
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  async function getData() {
-    setLoading(true);
-    const _schemas = await window.db.listSchemas(connection, database);
-    setSchemas(_schemas);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    getData();
-  }, []);
-
+  const [open, setOpen] = useState(true); // always open for now
   return (
     <div className={cn("px-4 space-y-0.5")}>
       <div
@@ -337,18 +389,16 @@ function SchemaList({
         />
         <div className="text-sm flex gap-1 items-center">
           <FileCode className="size-3 text-blue-500" /> Schemas
-          {loading && <Spinner className="size-3.5" />}
         </div>
       </div>
-
       {open && (
         <div className="space-y-0.5 relative">
           <div className="w-0.5 h-full bg-zinc-700/50 absolute left-6"></div>
-          {schemas.map((i) => (
+          {schemas.map((schema) => (
             <SchemaListItem
-              connection={connection}
-              database={database}
-              schema={i}
+              key={schema.schema.id}
+              schema={schema}
+              onSelect={onSelect}
             />
           ))}
         </div>
@@ -358,20 +408,20 @@ function SchemaList({
 }
 
 function SchemaListItem({
-  connection,
-  database,
   schema,
+  onSelect,
 }: {
-  connection: Database;
-  database: string;
-  schema: string;
+  schema: SchemaDef;
+  onSelect: (e: SelectedEntity) => void;
 }) {
   const [open, setOpen] = useState(false);
-
   return (
     <div className={cn("px-4 space-y-0.5")}>
       <div
-        onClick={() => setOpen((open) => !open)}
+        onClick={() => {
+          setOpen((open) => !open);
+          onSelect({ type: "schema", value: schema.schema });
+        }}
         className="flex gap-1 items-center hover:bg-zinc-800 transition-all px-4.5"
       >
         <ChevronRight
@@ -381,17 +431,13 @@ function SchemaListItem({
           )}
         />
         <div className="text-sm flex gap-1 items-center">
-          <FileCode className="size-3 text-blue-500" /> {schema}
+          <FileCode className="size-3 text-blue-500" /> {schema.schema.name}
         </div>
       </div>
       {open && (
         <div className="space-y-0.5 relative">
           <div className="w-0.5 h-full bg-zinc-700/50 absolute left-6"></div>
-          <TableList
-            connection={connection}
-            database={database}
-            schema={schema}
-          />
+          <TableList tables={schema.tables} onSelect={onSelect} />
         </div>
       )}
     </div>
@@ -399,34 +445,13 @@ function SchemaListItem({
 }
 
 function TableList({
-  schema,
-  database,
-  connection,
+  tables,
+  onSelect,
 }: {
-  connection: Database;
-  database: string;
-  schema: string;
+  tables: TableSchema[];
+  onSelect: (e: SelectedEntity) => void;
 }) {
-  const [open, setOpen] = useState(false);
-
-  const [tables, setTables] = useState<TableDef[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  async function getData() {
-    setLoading(true);
-    const _tables = await window.db.listSchemaTables(
-      connection,
-      schema,
-      database
-    );
-    setLoading(false);
-    setTables(_tables);
-  }
-
-  useEffect(() => {
-    getData();
-  }, []);
-
+  const [open, setOpen] = useState(true); // always open for now
   return (
     <div className={cn("px-4 space-y-0.5")}>
       <div
@@ -440,16 +465,18 @@ function TableList({
           )}
         />
         <div className="text-sm flex gap-1 items-center">
-          <Table className="size-3 text-blue-500" /> Tables{" "}
-          {loading && <Spinner className="size-3.5" />}
+          <Table className="size-3 text-purple-500" /> Tables
         </div>
       </div>
-
       {open && (
         <div className="space-y-0.5 relative">
           <div className="w-0.5 h-full bg-zinc-700/50 absolute left-6"></div>
-          {tables.map((i) => (
-            <TableListItem table={i} />
+          {tables.map((table) => (
+            <TableListItem
+              key={table.table.id}
+              table={table}
+              onSelect={onSelect}
+            />
           ))}
         </div>
       )}
@@ -457,12 +484,21 @@ function TableList({
   );
 }
 
-function TableListItem({ table }: { table: TableDef }) {
+function TableListItem({
+  table,
+  onSelect,
+}: {
+  table: TableSchema;
+  onSelect: (e: SelectedEntity) => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className={cn("px-4 space-y-0.5")}>
       <div
-        onClick={() => setOpen((open) => !open)}
+        onClick={() => {
+          setOpen((open) => !open);
+          onSelect({ type: "table", value: table.table });
+        }}
         className="flex min-w-fit w-full gap-1 items-center hover:bg-zinc-800 transition-all px-4.5"
       >
         <ChevronRight
@@ -472,23 +508,27 @@ function TableListItem({ table }: { table: TableDef }) {
           )}
         />
         <div className="text-sm flex gap-1 items-center">
-          <Table className="size-3 text-blue-500" /> {table.table}
+          <Table className="size-3 text-purple-500" /> {table.table.name}
         </div>
       </div>
-
       {open && (
         <div className="space-y-0.5 relative">
           <div className="w-0.5 h-full bg-zinc-700/50 absolute left-6"></div>
-          <ColumnList columns={table.columns} />
+          <ColumnList columns={table.columns} onSelect={onSelect} />
         </div>
       )}
     </div>
   );
 }
 
-function ColumnList({ columns }: { columns: ColumnDef[] }) {
+function ColumnList({
+  columns,
+  onSelect,
+}: {
+  columns: Column[];
+  onSelect: (e: SelectedEntity) => void;
+}) {
   const [open, setOpen] = useState(false);
-
   return (
     <div className={cn("px-4 space-y-0.5")}>
       <div
@@ -502,17 +542,19 @@ function ColumnList({ columns }: { columns: ColumnDef[] }) {
           )}
         />
         <div className="text-sm flex gap-1 items-center">
-          <Columns className="size-3 text-blue-500" /> Columns
+          <Columns className="size-3 text-zinc-400" /> Columns
         </div>
       </div>
-
       {open && (
         <div className="space-y-0.5 relative px-12 text-sm">
           <div className="w-0.5 h-full bg-zinc-700/50 absolute left-6"></div>
-
           {columns.map((i) => (
-            <div className="flex w-fit gap-1 items-center">
-              <Columns className="size-3 text-blue-500" />
+            <div
+              key={i.id}
+              className="flex w-fit gap-1 items-center cursor-pointer"
+              onClick={() => onSelect({ type: "column", value: i })}
+            >
+              <Columns className="size-3 text-zinc-400" />
               {i.name}
             </div>
           ))}
@@ -528,10 +570,10 @@ function ConnectionListContextMenu({
   setSelected,
 }: {
   children: React.ReactNode;
-  item?: Database;
-  setSelected?: React.Dispatch<SetStateAction<Database | null>>;
+  item?: Connection;
+  setSelected?: React.Dispatch<SetStateAction<Connection | null>>;
 }) {
-  const { connect, disconnect, error, setError, connected } = useDB();
+  const { connect, disconnect, error, setError, connected } = useQueryData();
 
   const [editConnectionOpen, setEditConnectionOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -649,7 +691,7 @@ function DeleteDatabaseDialog({
   open,
   setOpen,
 }: {
-  database: Database;
+  database: Connection;
   open: boolean;
   setOpen: React.Dispatch<SetStateAction<boolean>>;
 }) {
@@ -657,7 +699,7 @@ function DeleteDatabaseDialog({
   const [loading, setLoading] = useState(false);
   async function handleDelete() {
     setLoading(true);
-    await window.db.deleteDatabases([database.id]);
+    await window.connections.deleteConnections([database.id]);
     refreshDatabases();
     setLoading(false);
     setOpen(false);
@@ -675,7 +717,7 @@ function DeleteDatabaseDialog({
           onClick={() => handleDelete()}
           variant="destructive"
         >
-          Remove Database{" "}
+          Remove Connection{" "}
           {loading && <Loader2 className="size-4 animate-spin" />}
         </Button>
         <DialogClose asChild>
@@ -693,14 +735,14 @@ function EditConnectionForm({
 }: {
   open: boolean;
   setOpen: React.Dispatch<SetStateAction<boolean>>;
-  database: Database;
+  database: Connection;
 }) {
   const { refreshDatabases } = useAppData();
-  const [details, setDetails] = useState<Database>(database);
+  const [details, setDetails] = useState<Connection>(database);
   const [loading, setLoading] = useState(false);
-  async function handleSave(database: Database) {
+  async function handleSave(database: Connection) {
     setLoading(true);
-    await window.db.updateDatabase(database.id, details);
+    await window.connections.updateConnection(database.id, details);
     setLoading(false);
     setOpen(false);
     refreshDatabases();
@@ -728,5 +770,100 @@ function EditConnectionForm({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SidebarDetailsPanel({ selected }: { selected: SelectedEntity }) {
+  const [open, setOpen] = useState(false);
+  if (!selected) {
+    return (
+      <div
+        className="border-t border-zinc-800 bg-zinc-950 p-2 text-xs text-zinc-400 select-none cursor-pointer"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <ChevronRight
+          className={cn("inline size-3 mr-1", open && "rotate-90")}
+        />
+        Details
+      </div>
+    );
+  }
+  return (
+    <div className="border-t border-zinc-800 bg-zinc-950/50">
+      <div
+        className="p-2 text-xs text-zinc-400 select-none cursor-pointer flex items-center gap-1"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <ChevronRight className={cn("inline size-3", open && "rotate-90")} />
+        Details
+      </div>
+      {open && (
+        <div className="text-xs text-zinc-200">
+          {selected.type === "connection" && (
+            <>
+              <div className="border-b border-t p-1.5 font-mono">
+                Entity: Connection
+              </div>
+              <div className="p-1.5 border-b font-mono">
+                Name: {selected.value.name}
+              </div>
+              {selected.value.description && (
+                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
+                  {selected.value.description}
+                </div>
+              )}
+            </>
+          )}
+          {selected.type === "schema" && (
+            <>
+              <div className="border-b border-t p-1.5 font-mono">
+                Entity: Schema
+              </div>
+              <div className="p-1.5 border-b font-mono">
+                Name: {selected.value.name}
+              </div>
+              {selected.value.description && (
+                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
+                  {selected.value.description}
+                </div>
+              )}
+            </>
+          )}
+          {selected.type === "table" && (
+            <>
+              <div className="border-b border-t p-1.5 font-mono">
+                Entity: Table
+              </div>
+              <div className="p-1.5 border-b font-mono">
+                Name: {selected.value.name}
+              </div>
+              {selected.value.description && (
+                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
+                  {selected.value.description}
+                </div>
+              )}
+            </>
+          )}
+          {selected.type === "column" && (
+            <>
+              <div className="border-b border-t p-1.5 font-mono">
+                Entity: Column
+              </div>
+              <div className="p-1.5 border-b font-mono">
+                Name: {selected.value.name}
+              </div>
+              <div className="flex items-center gap-2 border-b font-mono p-1.5">
+                Type: {selected.value.type}
+              </div>
+              {selected.value.description && (
+                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
+                  {selected.value.description}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

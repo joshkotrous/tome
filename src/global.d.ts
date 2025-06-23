@@ -1,57 +1,106 @@
-import { DatabaseSchema, JsonQueryResult, TableDef } from "core/database";
-import { Conversation, ConversationMessage, Database, Settings } from "./types";
+import { DatabaseSchema, JsonQueryResult, TableDef } from "core/connection";
+import {
+  Conversation,
+  TomeMessage,
+  ProxyRequestOptions,
+  ProxyStreamResponse,
+  Query,
+  Settings,
+  StreamData,
+  Connection,
+  IndexJob,
+  ConnectionSchema,
+} from "./types";
 
 export {};
 
-interface DbAPI {
-  listDatabases: () => Promise<Database[]>;
-  getDatabase: (id: number) => Promise<Database>;
-  deleteDatabases: (ids: number[]) => Promise<void>;
-  updateDatabase: (id: number, values: Database) => Promise<Database>;
-  createDatabase: (values: Omit<Database, "id">) => Promise<Database>;
+interface ConnectionsApi {
+  listConnections: () => Promise<Connection[]>;
+  getConnection: (id: number) => Promise<Connection>;
+  deleteConnections: (ids: number[]) => Promise<void>;
+  updateConnection: (id: number, values: Connection) => Promise<Connection>;
+  createConnection: (values: Omit<Connection, "id">) => Promise<Connection>;
   testConnection: (
-    db: Omit<Database, "id">
+    db: Omit<Connection, "id">
   ) => Promise<{ success: boolean; error: string }>;
-  connect: (db: Database) => Promise<void>;
-  disconnect: (db: Database) => Promise<void>;
-  listRemoteDatabases: (db: Database) => Promise<string[]>;
-  listSchemas: (db: Database, targetDb?: string) => Promise<string[]>;
+  connect: (db: Connection) => Promise<void>;
+  disconnect: (db: Connection) => Promise<void>;
+  listRemoteDatabases: (db: Connection) => Promise<string[]>;
+  listSchemas: (db: Connection, targetDb?: string) => Promise<string[]>;
   listSchemaTables: (
-    db: Database,
+    db: Connection,
     targetSchema: string,
     targetDb?: string
   ) => Promise<TableDef[]>;
   query: (
-    db: Database,
+    db: Connection,
     sql: string,
     params?: any[]
   ) => Promise<JsonQueryResult>;
-  getFullSchema: (db: Database, targetDb?: string) => Promise<DatabaseSchema>;
+  getFullSchema: (db: Connection, targetDb?: string) => Promise<DatabaseSchema>;
+  getConnectionSchema: (connection: number) => Promise<ConnectionSchema>;
 }
 
-interface SettingsAPI {
+interface SettingsApi {
   getSettings: () => Promise<Settings>;
   updateSettings: (settings: Partial<Settings>) => Promise<Settings>;
 }
 
-interface MessagesAPI {
+interface MessagesApi {
   createMessage: (
-    values: Omit<ConversationMessage, "id" | "createdAt">
-  ) => Promise<ConversationMessage>;
-  listMessages: (conversation: number) => Promise<ConversationMessage[]>;
+    values: Omit<TomeMessage, "id" | "createdAt">
+  ) => Promise<TomeMessage>;
+  listMessages: (
+    conversation?: number,
+    query?: number
+  ) => Promise<TomeMessage[]>;
+  updateMessage: (
+    id: string,
+    values: Partial<TomeMessage>
+  ) => Promie<TomeMessage>;
 }
 
-interface ConversationsAPI {
+interface ConversationsApi {
   createConversation: (initialMessage: string) => Promise<Conversation>;
   listConversations: () => Promise<Conversation[]>;
   deleteConversation: (conversation: number) => Promise<void>;
+  getConversation: (id: number) => Promise<Conversation>;
+}
+
+interface QueriesApi {
+  listQueries: () => Promise<Query[]>;
+  getQuery: (id: number) => Promise<Query>;
+  updateQuery: (id: number, values: Partial<Query>) => Promise<Query>;
+  deleteQuery: (id: number) => Promise<void>;
+  createQuery: (values: Omit<Query, "id">) => Promise<Query>;
+}
+
+interface ProxyApi {
+  fetchStream: (
+    url: string,
+    options?: ProxyRequestOptions
+  ) => Promise<ProxyStreamResponse>;
+  onStreamData: (
+    streamId: string,
+    callback: (data: StreamData) => void
+  ) => () => void;
+}
+
+interface JobsApi {
+  listIndexJobs: (
+    connection: number,
+    status?: IndexJob["status"]
+  ) => Promise<IndexJob[]>;
 }
 
 declare global {
   interface Window {
-    db: DbAPI;
-    settings: SettingsAPI;
-    messages: MessagesAPI;
-    conversations: ConversationsAPI;
+    connections: ConnectionsApi;
+    settings: SettingsApi;
+    messages: MessagesApi;
+    conversations: ConversationsApi;
+    queries: QueriesApi;
+    proxy: ProxyApi;
+    jobs: JobsApi;
   }
 }
