@@ -1,16 +1,15 @@
 import { useEffect, useState } from "react";
+
 export function AnimateEllipse({ speed = 500 }) {
   const [content, setContent] = useState("");
-  const [dotCount, setDotCount] = useState(0);
 
   useEffect(() => {
+    let count = 0;
+
     const interval = setInterval(() => {
-      setDotCount((prev) => {
-        const newCount = prev >= 3 ? 0 : prev + 1;
-        setContent(".".repeat(newCount));
-        return newCount;
-      });
-    }, speed); // Use speed param for delay between each dot
+      count = count >= 3 ? 0 : count + 1;
+      setContent(".".repeat(count));
+    }, speed);
 
     return () => clearInterval(interval);
   }, [speed]);

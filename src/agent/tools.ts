@@ -195,7 +195,9 @@ export function getAgentTools({
 
   const askForPermission = tool({
     description: "Ask the user for permission to run destructive queries",
-    parameters: z.object({}),
+    parameters: z.object({
+      query: z.string().describe("The query youd like to run"),
+    }),
   });
 
   if (updateQuery && updateQuerySection) {

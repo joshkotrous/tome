@@ -27,6 +27,7 @@ import { ConnectionSchema, Query } from "@/types";
 import { DBInformation } from "./sidebar";
 import { createSchemaCompletionProvider } from "./monacoConfig";
 import { useAgent } from "@/agent/useAgent";
+import { ConversationDataProvider } from "@/conversationDataProvider";
 
 export default function QueryInterface() {
   const { agentModeEnabled, setAgentModeEnabled, settings } = useAppData();
@@ -58,7 +59,9 @@ export default function QueryInterface() {
               transition={{ duration: 0.1 }}
               className="h-full"
             >
-              <ChatInterface />
+              <ConversationDataProvider>
+                <ChatInterface />
+              </ConversationDataProvider>
             </motion.div>
           ) : (
             <motion.div

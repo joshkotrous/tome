@@ -1,6 +1,7 @@
 import {
   ArrowUp,
   Check,
+  ChevronRight,
   Database,
   FileCode,
   MessageCircle,
@@ -14,7 +15,7 @@ import { Textarea } from "./ui/textarea";
 import { SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { cn, displayDate } from "@/lib/utils";
 import Spinner from "./ui/spinner";
-import MarkdownRenderer from "./markdownRederer";
+import MarkdownRenderer, { TomeSyntaxHighlighter } from "./markdownRederer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import ResizableContainer from "./ui/resizableContainer";
 import { Conversation, TomeMessage } from "@/types";
@@ -46,6 +47,7 @@ import {
 import { Text } from "./ui/text";
 import { AnimateEllipse } from "./animatedEllipse";
 import { useAgent } from "@/agent/useAgent";
+import { useConversationData } from "@/conversationDataProvider";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -55,6 +57,14 @@ type ChatMessage = {
 
 export default function ChatInterface() {
   const { settings } = useAppData();
+
+  const {
+    conversations,
+    selectedConversation,
+    setSelectedConversation,
+    currentMessages,
+    refreshConversations,
+  } = useConversationData();
 
   const [model, setModel] = useState<TomeAgentModel>({
     provider: "Open AI",
@@ -69,28 +79,26 @@ export default function ChatInterface() {
     );
   }, [settings]);
 
-  const [selectedConversation, setSelectedConversation] = useState<
-    number | null
-  >(null);
   const [input, setInput] = useState("");
 
-  const [initialMessages, setInitialMessages] = useState<TomeMessage[]>([]);
-
-  const { messages, thinking, sendMessage } = useAgent({
-    initialMessages,
-    model,
-    mode: "agent",
-  });
+  const { messages, thinking, sendMessage, permissionNeeded, approveQuery } =
+    useAgent({
+      initialMessages: currentMessages,
+      model,
+      mode: "agent",
+      selectedConversation,
+    });
 
   async function send(msg: string) {
     setInput("");
     if (!selectedConversation) {
       const convo = await window.conversations.createConversation(msg);
-      setSelectedConversation(convo.id);
+      refreshConversations();
+      setSelectedConversation(convo);
       await sendMessage(msg, convo.id);
       return;
     }
-    await sendMessage(msg, selectedConversation);
+    await sendMessage(msg);
   }
 
   const suggestions = [
@@ -113,26 +121,18 @@ export default function ChatInterface() {
     },
   ];
 
-  useEffect(() => {
-    async function getData() {
-      if (selectedConversation) {
-        const convo = await window.messages.listMessages(selectedConversation);
-        setInitialMessages(convo);
-      } else {
-        setInitialMessages([]);
-      }
-    }
-    getData();
-  }, [selectedConversation]);
-
   return (
     <div className="flex flex-1 h-full">
       <ConversationsList
+        refreshConversations={refreshConversations}
+        conversations={conversations}
         selectedConversation={selectedConversation}
         setSelectedConversation={setSelectedConversation}
       />
       {selectedConversation && messages.length > 0 && (
         <ChatInputDisplay
+          refreshResponse={approveQuery}
+          permissionNeeded={permissionNeeded}
           showQueryControls={false}
           messages={messages}
           thinking={thinking}
@@ -140,7 +140,7 @@ export default function ChatInterface() {
           setInput={setInput}
           model={model}
           setModel={setModel}
-          sendMessage={sendMessage}
+          sendMessage={send}
         />
       )}
       {!selectedConversation && (
@@ -152,7 +152,7 @@ export default function ChatInterface() {
             {suggestions.map((i) => (
               <div
                 key={i.name}
-                onClick={() => sendMessage(i.message)}
+                onClick={() => send(i.message)}
                 className="text-xs px-2 p-1 border rounded-full bg-zinc-900 hover:bg-zinc-800 select-none transition-all"
               >
                 {i.name}
@@ -441,27 +441,38 @@ export function Thinking({ className }: { className?: string }) {
 }
 
 function ConversationsList({
+  conversations,
   selectedConversation,
   setSelectedConversation,
+  refreshConversations,
 }: {
-  selectedConversation: number | null;
-  setSelectedConversation: React.Dispatch<SetStateAction<number | null>>;
+  conversations: Conversation[];
+  selectedConversation: Conversation | null;
+  refreshConversations: () => void;
+  setSelectedConversation: React.Dispatch<SetStateAction<Conversation | null>>;
 }) {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [open, setOpen] = useState(true);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top when conversations change and we're adding to the beginning
+  useEffect(() => {
+    if (scrollContainerRef.current && conversations.length > 0) {
+      // If the first conversation is very recent (within last 5 seconds), scroll to top
+      const firstConversation = conversations[0];
+      const now = new Date();
+      const conversationAge =
+        now.getTime() - new Date(firstConversation.createdAt).getTime();
+
+      if (conversationAge < 5000) {
+        // 5 seconds
+        scrollContainerRef.current.scrollTop = 0;
+      }
+    }
+  }, [conversations.length]);
 
   function handleOpen() {
     setOpen((open) => !open);
   }
-
-  async function getData() {
-    const convos = await window.conversations.listConversations();
-    setConversations(convos);
-  }
-
-  useEffect(() => {
-    getData();
-  }, []);
 
   return (
     <ResizableContainer
@@ -508,8 +519,11 @@ function ConversationsList({
         {open && <Input placeholder="Search..." />}
       </div>
 
-      {/* Scrollable Content - This is the key fix */}
-      <div className="flex-1 overflow-y-auto flex flex-col gap-1.5 p-2 min-h-0">
+      {/* Scrollable Content - Add ref here */}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto flex flex-col gap-1.5 p-2 min-h-0"
+      >
         {open && !selectedConversation && (
           <div
             className={cn(
@@ -521,30 +535,94 @@ function ConversationsList({
         )}
         {open &&
           conversations.map((i) => (
-            <div
+            <ConversationListItem
               key={i.id}
-              onClick={() => setSelectedConversation(i.id)}
-              className={cn(
-                "rounded-sm text-zinc-400 p-1 gap-2 px-4 pr-1 items-center text-sm hover:bg-zinc-800 select-none transition-all flex flex-shrink-0",
-                selectedConversation === i.id && "bg-zinc-800 text-white"
-              )}
-            >
-              <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
-                {i.name}
-              </span>
-              <span className="text-xs flex-shrink-0">
-                {displayDate(i.createdAt)}
-              </span>
-              <div className="flex-shrink-0">
-                <DeleteConversation
-                  onComplete={async () => await getData()}
-                  conversation={i}
-                />
-              </div>
-            </div>
+              conversation={i}
+              refreshConversations={refreshConversations}
+              selectedConversation={selectedConversation}
+              setSelectedConversation={setSelectedConversation}
+            />
           ))}
       </div>
     </ResizableContainer>
+  );
+}
+
+function ConversationListItem({
+  selectedConversation,
+  setSelectedConversation,
+  conversation,
+  refreshConversations,
+}: {
+  selectedConversation: Conversation | null;
+  setSelectedConversation: React.Dispatch<SetStateAction<Conversation | null>>;
+  conversation: Conversation;
+  refreshConversations: () => void;
+}) {
+  const [name, setName] = useState(conversation.name);
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    let isCancelled = false;
+
+    const pollForName = async () => {
+      try {
+        const updatedConversation = await window.conversations.getConversation(
+          conversation.id
+        );
+
+        if (!isCancelled && updatedConversation?.name) {
+          setName(updatedConversation.name);
+          if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+          }
+        }
+      } catch (error) {
+        console.error("Error polling for conversation name:", error);
+      }
+    };
+
+    // If name is not present, start polling
+    if (!conversation.name) {
+      // Try immediately first
+      pollForName();
+
+      // Then poll every 2 seconds until name is found
+      intervalId = setInterval(pollForName, 2000);
+    }
+
+    // Cleanup function
+    return () => {
+      isCancelled = true;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [conversation.id, conversation.name]);
+
+  return (
+    <div
+      key={conversation.id}
+      onClick={() => setSelectedConversation(conversation)}
+      className={cn(
+        "rounded-sm text-zinc-400 p-1 gap-2 px-4 pr-1 items-center text-sm hover:bg-zinc-800 select-none transition-all flex flex-shrink-0",
+        selectedConversation?.id === conversation.id && "bg-zinc-800 text-white"
+      )}
+    >
+      <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
+        {name || <Text variant="shine">Generating...</Text>}
+      </span>
+      <span className="text-xs flex-shrink-0">
+        {displayDate(conversation.createdAt)}
+      </span>
+      <div className="flex-shrink-0">
+        <DeleteConversation
+          onComplete={() => refreshConversations()}
+          conversation={conversation}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -852,6 +930,8 @@ function ChatMessage({
 }) {
   const fromUser = message.role === "user";
 
+  const [queryPreviewOpen, setQueryPreviewOpen] = useState(false);
+
   return (
     <div
       className={cn(
@@ -862,8 +942,11 @@ function ChatMessage({
       {message.role === "assistant" &&
         message.parts
           .filter((i) => i.type === "tool-invocation")
-          .map((k) => (
-            <div className="border p-2 rounded-sm bg-zinc-900/75 w-fit my-1">
+          .map((k, index) => (
+            <div
+              key={index}
+              className="border p-2 rounded-sm bg-zinc-900/75 w-fit my-1"
+            >
               <div className="flex gap-1.5 items-center text-xs text-zinc-400">
                 {k.toolInvocation.state === "partial-call" &&
                   k.toolInvocation.toolName === "askForPermission" && (
@@ -874,6 +957,30 @@ function ChatMessage({
                 )}
                 {toolDisplay(k)}
               </div>
+              {k.toolInvocation.toolName === "askForPermission" &&
+                k.toolInvocation.args?.query && (
+                  <div className="mt-2 space-y-2 flex flex-1 flex-col overflow-auto">
+                    <div
+                      onClick={() => setQueryPreviewOpen((prev) => !prev)}
+                      className="flex items-center gap-0.5 text-xs text-zinc-500 hover:text-zinc-300 transition-all cursor-default select-none"
+                    >
+                      <ChevronRight
+                        className={cn(
+                          "size-3.5",
+                          queryPreviewOpen && "rotate-90"
+                        )}
+                      />{" "}
+                      View Query
+                    </div>
+                    {queryPreviewOpen && (
+                      <TomeSyntaxHighlighter
+                        content={k.toolInvocation.args.query}
+                        language="sql"
+                        showLineNumbers={false}
+                      />
+                    )}
+                  </div>
+                )}
             </div>
           ))}
 

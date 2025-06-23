@@ -54,12 +54,17 @@ interface MessagesApi {
     conversation?: number,
     query?: number
   ) => Promise<TomeMessage[]>;
+  updateMessage: (
+    id: string,
+    values: Partial<TomeMessage>
+  ) => Promie<TomeMessage>;
 }
 
 interface ConversationsApi {
   createConversation: (initialMessage: string) => Promise<Conversation>;
   listConversations: () => Promise<Conversation[]>;
   deleteConversation: (conversation: number) => Promise<void>;
+  getConversation: (id: number) => Promise<Conversation>;
 }
 
 interface QueriesApi {

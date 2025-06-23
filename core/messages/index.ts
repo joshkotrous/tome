@@ -40,3 +40,15 @@ export async function listMessages(
 
   throw new Error("One of conversation or message must be provided");
 }
+
+export async function updateMessage(
+  id: string,
+  values: Partial<TomeMessage>
+): Promise<TomeMessage> {
+  const [updated] = await db
+    .update(schema.messages)
+    .set(values)
+    .where(eq(schema.messages.id, id))
+    .returning();
+  return updated;
+}

@@ -74,7 +74,7 @@ function SetupWindow() {
                 instant results.
               </div>
               <Button
-                onClick={() => setStep("add connection")}
+                onClick={() => setStep("settings")}
                 size="lg"
                 variant="secondary"
                 className="text-xl w-full"
@@ -92,7 +92,7 @@ function SetupWindow() {
               Add your first connection to get started
             </DialogDescription>
 
-            <AddConnectionForm onComplete={() => setStep("settings")} />
+            <AddConnectionForm onComplete={() => handleComplete()} />
           </>
         );
       case "settings":
@@ -102,8 +102,10 @@ function SetupWindow() {
             <DialogDescription>
               Configure AI features to experience the true magic of Tome
             </DialogDescription>
-            <AIFeaturesSettingsPage onComplete={() => handleComplete()} />
-            <Button onClick={() => handleComplete()}>Skip</Button>
+            <AIFeaturesSettingsPage
+              onComplete={() => setStep("add connection")}
+            />
+            <Button onClick={() => setStep("add connection")}>Skip</Button>
           </>
         );
     }

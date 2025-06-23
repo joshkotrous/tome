@@ -2,6 +2,7 @@ import { AIProvider, Settings } from "@/types";
 import {
   createConversation,
   deleteConversation,
+  getConversation,
   listConversations,
 } from "../../core/conversations";
 import { getSettings } from "../../core/settings";
@@ -71,3 +72,13 @@ ipcMain.handle(
     }
   }
 );
+
+ipcMain.handle("conversations:getConversation", async (_event, id: number) => {
+  try {
+    const conversation = await getConversation(id);
+    return conversation;
+  } catch (error) {
+    console.error("Could not get conversation");
+    throw error;
+  }
+});

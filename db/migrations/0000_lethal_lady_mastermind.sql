@@ -1,10 +1,10 @@
-CREATE TABLE `conversations` (
+CREATE TABLE IF NOT EXISTS `conversations` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`name` text NOT NULL,
 	`createdAt` integer DEFAULT '"2025-06-17T01:56:38.842Z"' NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `connections` (
+CREATE TABLE IF NOT EXISTS `connections` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`name` text NOT NULL,
 	`description` text,
@@ -13,7 +13,7 @@ CREATE TABLE `connections` (
 	`createdAt` integer DEFAULT '"2025-06-17T01:56:38.842Z"' NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `messages` (
+CREATE TABLE IF NOT EXISTS `messages` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`role` text NOT NULL,
 	`content` text NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE `messages` (
 	FOREIGN KEY (`query`) REFERENCES `queries`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE TABLE `queries` (
+CREATE TABLE IF NOT EXISTS `queries` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`connection` integer NOT NULL,
 	`query` text NOT NULL,

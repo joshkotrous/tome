@@ -1,5 +1,9 @@
 import { TomeMessage } from "@/types";
-import { createMessage, listMessages } from "../../core/messages";
+import {
+  createMessage,
+  listMessages,
+  updateMessage,
+} from "../../core/messages";
 import { ipcMain } from "electron";
 
 ipcMain.handle(
@@ -23,6 +27,19 @@ ipcMain.handle(
       return messages;
     } catch (error) {
       console.error("Failed to list messages");
+      throw error;
+    }
+  }
+);
+
+ipcMain.handle(
+  "messages:updateMessage",
+  async (_event, id: string, values: Partial<TomeMessage>) => {
+    try {
+      const updated = await updateMessage(id, values);
+      return updated;
+    } catch (error) {
+      console.error("Failed to update message");
       throw error;
     }
   }

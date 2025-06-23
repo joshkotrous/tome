@@ -1,12 +1,17 @@
 import { useAppData } from "@/applicationDataProvider";
-import { Connection, ConnectionSchema, Query, TomeMessage } from "@/types";
+import {
+  Connection,
+  ConnectionSchema,
+  Conversation,
+  Query,
+  TomeMessage,
+} from "@/types";
 import { streamResponse, TomeAgentModel } from "../../core/ai";
 import React, { SetStateAction, useState, useEffect } from "react";
 import { getAgentTools } from "./tools";
 import { AGENT_MODE_PROMPT, EDITOR_AGENT_PROMPT } from "./prompts";
 import { nanoid } from "nanoid";
 import { useQueryData } from "@/queryDataProvider";
-import { ToolInvocationUIPart } from "@ai-sdk/ui-utils";
 
 export function updateMessagesWithToolResult(
   messages: TomeMessage[],
@@ -80,6 +85,7 @@ export function updateMessagesWithToolResult(
 
   // Replace the last message in the array
   updatedMessages[updatedMessages.length - 1] = lastMessage;
+  window.messages.updateMessage(lastMessage.id, lastMessage);
   return updatedMessages;
 }
 
@@ -92,6 +98,7 @@ interface UseAgentOptions {
   setQuery?: React.Dispatch<SetStateAction<string>>;
   currentConnection?: Connection;
   currentQuery?: Query;
+  selectedConversation?: Conversation | null;
 }
 
 export function useAgent({
@@ -103,6 +110,7 @@ export function useAgent({
   setQuery,
   currentConnection,
   currentQuery,
+  selectedConversation,
 }: UseAgentOptions) {
   const { settings } = useAppData();
   const { connect, connected, runQuery } = useQueryData();
@@ -114,6 +122,20 @@ export function useAgent({
   // Update messages when initialMessages changes (e.g., when switching queries)
   useEffect(() => {
     setMessages(initialMessages);
+    if (initialMessages.length > 0) {
+      const lastMsg = initialMessages[initialMessages.length - 1];
+      console.log("initial", lastMsg);
+      if (
+        lastMsg.parts.some(
+          (i) =>
+            i.type === "tool-invocation" &&
+            i.toolInvocation.toolName === "askForPermission" &&
+            i.toolInvocation.state === "partial-call"
+        )
+      ) {
+        setPermissionNeeded(true);
+      }
+    }
   }, [initialMessages]);
 
   async function getConnection(connectionName: string, connectionId: number) {
@@ -158,7 +180,7 @@ export function useAgent({
     const newMessage: TomeMessage = {
       id: nanoid(4),
       content,
-      conversation: conversation ?? null,
+      conversation: selectedConversation?.id ?? conversation ?? null,
       parts: [{ type: "text", text: content }],
       query: currentQuery?.id ?? null,
       role: "user",
@@ -246,7 +268,7 @@ export function useAgent({
                 role: "assistant" as const,
                 content: textDelta,
                 createdAt: new Date(),
-                conversation: conversation ?? null,
+                conversation: selectedConversation?.id ?? conversation ?? null,
                 query: currentQuery?.id ?? null,
                 parts: [],
               },
@@ -269,7 +291,7 @@ export function useAgent({
                 role: "assistant",
                 content: "",
                 createdAt: new Date(),
-                conversation: conversation ?? null,
+                conversation: selectedConversation?.id ?? conversation ?? null,
                 query: currentQuery?.id ?? null,
                 parts: [
                   {
@@ -288,14 +310,14 @@ export function useAgent({
         }
 
         if (chunk.type === "tool-call") {
-          const { toolCallId, toolName } = chunk;
-          if (toolName === "askForPermission") {
+          const { toolCallId, toolName, args } = chunk;
+          const askForPermissionTool = toolName === "askForPermission";
+          if (askForPermissionTool) {
             setPermissionNeeded(true);
-            return;
           }
           window.messages.createMessage({
             content: "",
-            conversation: conversation ?? null,
+            conversation: selectedConversation?.id ?? conversation ?? null,
             query: currentQuery?.id ?? null,
             parts: [
               {
@@ -303,9 +325,9 @@ export function useAgent({
                 toolInvocation: {
                   toolName,
                   toolCallId,
-                  state: "result",
+                  state: askForPermissionTool ? "partial-call" : "result",
                   result: "",
-                  args: {},
+                  args,
                 },
               },
             ],
@@ -338,8 +360,9 @@ export function useAgent({
                     ...part,
                     toolInvocation: {
                       ...part.toolInvocation,
-                      state: "result",
+                      state: askForPermissionTool ? "partial-call" : "result",
                       result: "",
+                      args,
                     },
                   };
                 }
@@ -353,24 +376,17 @@ export function useAgent({
           });
         }
       },
-      onFinish: ({ text, toolCalls }) => {
-        const calls: ToolInvocationUIPart[] = toolCalls.map((i) => ({
-          type: "tool-invocation",
-          toolInvocation: {
-            state: "result",
-            toolCallId: i.toolCallId,
-            toolName: i.toolName,
-            args: i.args,
-            result: "",
-          },
-        }));
-        window.messages.createMessage({
-          content: text,
-          query: currentQuery?.id ?? null,
-          role: "assistant",
-          conversation: conversation ?? null,
-          parts: calls,
-        });
+      onFinish: ({ text }) => {
+        console.log(text);
+        if (text) {
+          window.messages.createMessage({
+            content: text,
+            query: currentQuery?.id ?? null,
+            role: "assistant",
+            conversation: selectedConversation?.id ?? conversation ?? null,
+            parts: [{ type: "text", text }],
+          });
+        }
       },
     });
 

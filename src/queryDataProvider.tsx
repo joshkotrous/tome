@@ -97,8 +97,9 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
     await window.queries.deleteQuery(queryToDelete.id);
     refreshQueries();
     // If the deleted query was the current query, clear it
+
     setCurrentQuery((current) => {
-      return current?.id === queryToDelete.id ? null : current;
+      return current?.id === queryToDelete.id ? queries[0] : current;
     });
   }, []);
 
