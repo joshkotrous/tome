@@ -17,7 +17,8 @@ interface QueryDataContextValue {
   queries: Query[];
   queryResult: JsonQueryResult | null;
   loadingQuery: boolean;
-  error: string | null;
+  queryError: string | null;
+  connectError: string | null;
   refreshQuery: () => Promise<void>;
   queryMessages: TomeMessage[];
   runQuery: (
@@ -34,7 +35,8 @@ interface QueryDataContextValue {
   loadingDb: boolean;
   connect: (db: Connection) => Promise<Connection | null>;
   disconnect: (db: Connection) => Promise<void>;
-  setError: React.Dispatch<SetStateAction<string | null>>;
+  setQueryError: React.Dispatch<SetStateAction<string | null>>;
+  setConnectError: React.Dispatch<SetStateAction<string | null>>;
 }
 
 const QueryDataContext = createContext<QueryDataContextValue | undefined>(
@@ -53,13 +55,14 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
   const [loadingQuery, setLoadingQuery] = useState(false);
   const [queryResult, setQueryResult] = useState<JsonQueryResult | null>(null);
   const [queryMessages, setQueryMessages] = useState<TomeMessage[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [queryError, setQueryError] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
   const [loadingDb, setLoadingDb] = useState(false);
 
   const runQuery = useCallback(async (conn: Connection, query: string) => {
     setLoadingQuery(true);
     // setQueryResult(null);
-    setError(null);
+    setQueryError(null);
     try {
       const connection = await window.connections.getConnection(conn.id);
       const result = await window.connections.query(connection, query);
@@ -69,7 +72,7 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
       return result;
     } catch (error: any) {
       console.error("Failed to run query", error);
-      setError(error.message);
+      setQueryError(error.message);
       return { error: error.message };
     } finally {
       setLoadingQuery(false);
@@ -117,11 +120,11 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
       try {
         await window.connections.connect(db); // IPC bridge
         setConnected((prev) => [...prev, db]); // add to list
-        setError(null);
+        setConnectError(null);
         return db;
       } catch (err: any) {
         console.error("DB connect failed:", err);
-        setError(err?.message ?? "Unknown error");
+        setConnectError(err?.message ?? "Unknown error");
         return null;
       } finally {
         setLoadingDb(false);
@@ -138,10 +141,10 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
       try {
         await window.connections.disconnect(db); // pass which DB to close
         setConnected((prev) => prev.filter((c) => c.id !== db.id));
-        setError(null);
+        setConnectError(null);
       } catch (err: any) {
         console.error("DB disconnect failed:", err);
-        setError(err?.message ?? "Unknown error");
+        setConnectError(err?.message ?? "Unknown error");
       } finally {
         setLoadingDb(false);
       }
@@ -201,7 +204,7 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
       runQuery,
       createQuery,
       deleteQuery,
-      error,
+      queryError,
       updateQuery,
       refreshQueries,
       currentConnection,
@@ -210,11 +213,17 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
       connect,
       disconnect,
       connected,
-      setError,
+      setQueryError,
+      connectError,
+      setConnectError,
       connections,
       setCurrentConnection,
     }),
     [
+      queryError,
+      connectError,
+      setQueryError,
+      setConnectError,
       currentQuery,
       connections,
       setCurrentQuery,
@@ -225,7 +234,6 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
       runQuery,
       createQuery,
       deleteQuery,
-      error,
       updateQuery,
       refreshQueries,
       currentConnection,
@@ -234,7 +242,6 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
       connect,
       disconnect,
       connected,
-      setError,
     ]
   );
 
