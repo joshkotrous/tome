@@ -7,7 +7,7 @@ import { Button } from "./ui/button";
 import { Check, FileOutput, X } from "lucide-react";
 
 export default function QueryDisplay() {
-  const { loadingQuery, queryResult, error } = useQueryData();
+  const { loadingQuery, queryResult, queryError } = useQueryData();
   return (
     <div className="flex flex-col h-full min-h-0">
       <QueryToolbar />
@@ -17,7 +17,7 @@ export default function QueryDisplay() {
           Loading Query...
         </div>
       )}
-      {error && <div className="font-mono text-xs p-2">{error}</div>}
+      {queryError && <div className="font-mono text-xs p-2">{queryError}</div>}
       {!loadingQuery && <QueryResultTable result={queryResult} />}
     </div>
   );
@@ -36,11 +36,11 @@ function QueryToolbar() {
 }
 
 export function QueryStatus() {
-  const { loadingQuery, queryResult, error } = useQueryData();
+  const { loadingQuery, queryResult, queryError } = useQueryData();
   return (
     <div className="flex gap-1.5">
       {loadingQuery && <Spinner className="" />}
-      {error && (
+      {queryError && (
         <div className="flex items-center text-xs text-zinc-400 gap-1.5">
           <X className="size-4 text-red-500" /> Error
         </div>

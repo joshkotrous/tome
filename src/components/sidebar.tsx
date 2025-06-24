@@ -573,7 +573,8 @@ function ConnectionListContextMenu({
   item?: Connection;
   setSelected?: React.Dispatch<SetStateAction<Connection | null>>;
 }) {
-  const { connect, disconnect, error, setError, connected } = useQueryData();
+  const { connect, disconnect, connectError, setConnectError, connected } =
+    useQueryData();
 
   const [editConnectionOpen, setEditConnectionOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -582,10 +583,10 @@ function ConnectionListContextMenu({
   const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
-    if (error !== null && error !== "") {
+    if (connectError !== null && connectError !== "") {
       setErrorOpen(true);
     }
-  }, [error]);
+  }, [connectError]);
 
   return (
     <>
@@ -608,10 +609,10 @@ function ConnectionListContextMenu({
                 <X className="text-red-500" /> Failed to connect to {item.name}
               </div>
               <div className="border p-2 rounded-sm font-mono text-xs">
-                {error}
+                {connectError}
               </div>
               <DialogClose asChild>
-                <Button onClick={() => setError(null)}>Close</Button>
+                <Button onClick={() => setConnectError(null)}>Close</Button>
               </DialogClose>
             </DialogContent>
           </Dialog>
