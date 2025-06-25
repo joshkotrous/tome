@@ -57,9 +57,11 @@ export default function Toolbar() {
       <div className="flex gap-2 justify-end">
         <NavCmdButton />
         <SettingsDialog>
-          <Button size="xs">
-            <Settings className="size-4" />
-          </Button>
+          <div>
+            <Button size="xs">
+              <Settings className="size-4" />
+            </Button>
+          </div>
         </SettingsDialog>
       </div>
     </div>
@@ -303,7 +305,7 @@ export function AIFeaturesSettingsPage({
   }
 
   return (
-    <div className="pt-1 space-y-4 size-full">
+    <div className="pt-1 space-y-4 w-full">
       <h2 className="font-semibold text-xl">AI Features</h2>
       <div className="space-y-3">
         <div className="flex gap-4 items-center text-sm text-zinc-400">

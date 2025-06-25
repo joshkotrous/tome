@@ -284,14 +284,16 @@ export function SqlEditor() {
           {currentConnection && <DBInformation db={currentConnection} />}
           <div className="flex items-center gap-0.5">
             <Tooltip delayDuration={700}>
-              <TooltipTrigger>
-                <Button
-                  onClick={() => handleRunQuery()}
-                  variant="ghost"
-                  className="has-[>svg]:p-1.5 h-fit"
-                >
-                  <Play className="size-3.5 text-green-500" />
-                </Button>
+              <TooltipTrigger asChild>
+                <div>
+                  <Button
+                    onClick={() => handleRunQuery()}
+                    variant="ghost"
+                    className="has-[>svg]:p-1.5 h-fit"
+                  >
+                    <Play className="size-3.5 text-green-500" />
+                  </Button>
+                </div>
               </TooltipTrigger>
               <TooltipContent>
                 Run query <Kbd cmd="⌘↵" />
@@ -301,15 +303,17 @@ export function SqlEditor() {
             {/* Run Selection Button - only show when text is selected */}
 
             <Tooltip delayDuration={700}>
-              <TooltipTrigger>
-                <Button
-                  disabled={!hasSelection}
-                  onClick={() => handleRunSelection()}
-                  variant="ghost"
-                  className="has-[>svg]:p-1.5 h-fit"
-                >
-                  <PlayCircle className="size-3.5 text-blue-500" />
-                </Button>
+              <TooltipTrigger asChild>
+                <div>
+                  <Button
+                    disabled={!hasSelection}
+                    onClick={() => handleRunSelection()}
+                    variant="ghost"
+                    className="has-[>svg]:p-1.5 h-fit"
+                  >
+                    <PlayCircle className="size-3.5 text-blue-500" />
+                  </Button>
+                </div>
               </TooltipTrigger>
               <TooltipContent>
                 Run selection <Kbd cmd="⌘⇧↵" />
@@ -317,14 +321,16 @@ export function SqlEditor() {
             </Tooltip>
 
             <Tooltip delayDuration={700}>
-              <TooltipTrigger>
-                <Button
-                  onClick={() => handleClearQuery()}
-                  variant="ghost"
-                  className="has-[>svg]:p-1.5 h-fit"
-                >
-                  <RefreshCcw className="size-3.5 text-amber-500" />
-                </Button>
+              <TooltipTrigger asChild>
+                <div>
+                  <Button
+                    onClick={() => handleClearQuery()}
+                    variant="ghost"
+                    className="has-[>svg]:p-1.5 h-fit"
+                  >
+                    <RefreshCcw className="size-3.5 text-amber-500" />
+                  </Button>
+                </div>
               </TooltipTrigger>
               <TooltipContent>
                 Clear query <Kbd cmd="⌘C" />
@@ -621,22 +627,24 @@ function QueryTabs() {
         />
       ))}
       <Tooltip delayDuration={700}>
-        <TooltipTrigger>
-          <Button
-            onClick={() => {
-              if (!currentConnection) return;
-              createQuery({
-                connection: currentConnection?.id,
-                createdAt: new Date(),
-                query: "",
-                title: "untitled",
-              });
-            }}
-            size="xs"
-            className="h-fit !p-1 ml-2 sticky right-1"
-          >
-            <Plus className="size-4" />
-          </Button>
+        <TooltipTrigger asChild>
+          <div>
+            <Button
+              onClick={() => {
+                if (!currentConnection) return;
+                createQuery({
+                  connection: currentConnection?.id,
+                  createdAt: new Date(),
+                  query: "",
+                  title: "untitled",
+                });
+              }}
+              size="xs"
+              className="h-fit !p-1 ml-2 sticky right-1"
+            >
+              <Plus className="size-4" />
+            </Button>
+          </div>
         </TooltipTrigger>
         <TooltipContent>New query</TooltipContent>
       </Tooltip>

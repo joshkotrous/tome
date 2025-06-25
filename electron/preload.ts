@@ -27,3 +27,6 @@ import "./bridge/messages";
 import "./bridge/queries";
 import "./bridge/settings";
 import "./bridge/jobs";
+import "./bridge/columns";
+import "./bridge/schemas";
+import "./bridge/tables";

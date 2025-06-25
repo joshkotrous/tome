@@ -360,11 +360,13 @@ export function DatabaseSwitcher() {
           }
         }}
       >
-        <TooltipTrigger>
-          <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900">
-            <Database className="size-3" />
-            {currentConnection?.name}
-          </SelectTrigger>
+        <TooltipTrigger asChild>
+          <div>
+            <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900">
+              <Database className="size-3" />
+              {currentConnection?.name}
+            </SelectTrigger>
+          </div>
         </TooltipTrigger>
 
         <SelectContent className="dark">
@@ -409,11 +411,13 @@ export function QuerySwitcher() {
           }
         }}
       >
-        <TooltipTrigger>
-          <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900">
-            <FileCode className="size-3" />
-            {currentQuery?.title}
-          </SelectTrigger>
+        <TooltipTrigger asChild>
+          <div>
+            <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900">
+              <FileCode className="size-3" />
+              {currentQuery?.title}
+            </SelectTrigger>
+          </div>
         </TooltipTrigger>
 
         <SelectContent className="dark">
@@ -717,14 +721,16 @@ function ChatInput({
             }}
           />
           <Tooltip delayDuration={1000}>
-            <TooltipTrigger>
-              <Button
-                onClick={handleSubmit}
-                variant="secondary"
-                className="rounded-full has-[>svg]:p-2 h-fit"
-              >
-                <ArrowUp className="stroke-3" />
-              </Button>
+            <TooltipTrigger asChild>
+              <div>
+                <Button
+                  onClick={handleSubmit}
+                  variant="secondary"
+                  className="rounded-full has-[>svg]:p-2 h-fit"
+                >
+                  <ArrowUp className="stroke-3" />
+                </Button>
+              </div>
             </TooltipTrigger>
             <TooltipContent>⌘ ↵ </TooltipContent>
           </Tooltip>

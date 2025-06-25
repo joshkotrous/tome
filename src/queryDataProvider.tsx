@@ -98,11 +98,12 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
 
   const deleteQuery = useCallback(async (queryToDelete: Query) => {
     await window.queries.deleteQuery(queryToDelete.id);
-    refreshQueries();
+
+    const _queries = await refreshQueries();
     // If the deleted query was the current query, clear it
 
     setCurrentQuery((current) => {
-      return current?.id === queryToDelete.id ? queries[0] : current;
+      return current?.id === queryToDelete.id ? _queries[0] : current;
     });
   }, []);
 
@@ -162,7 +163,7 @@ export function QueryDataProvider({ children }: { children: React.ReactNode }) {
   }
 
   const refreshQueries = useCallback(async () => {
-    await getData();
+    return await getData();
   }, []);
 
   async function init() {

@@ -56,19 +56,21 @@ export default function BottomBar() {
         <QueryStatus />
         <div className="flex items-center gap-1 px-1">
           <Tooltip delayDuration={700}>
-            <TooltipTrigger>
-              <Button
-                onClick={handleOpen}
-                size="xs"
-                variant="ghost"
-                className="w-fit has-[>svg]:px-1 h-fit py-1"
-              >
-                {open ? (
-                  <Minus className="text-zinc-500 size-4" />
-                ) : (
-                  <ChevronUp className="text-zinc-500 size-4" />
-                )}
-              </Button>
+            <TooltipTrigger asChild>
+              <div>
+                <Button
+                  onClick={handleOpen}
+                  size="xs"
+                  variant="ghost"
+                  className="w-fit has-[>svg]:px-1 h-fit py-1"
+                >
+                  {open ? (
+                    <Minus className="text-zinc-500 size-4" />
+                  ) : (
+                    <ChevronUp className="text-zinc-500 size-4" />
+                  )}
+                </Button>
+              </div>
             </TooltipTrigger>
             <TooltipContent>
               {open ? "Close" : "Open"} Output <Kbd cmd="⌘O" />
@@ -76,15 +78,17 @@ export default function BottomBar() {
           </Tooltip>
 
           <Tooltip delayDuration={700}>
-            <TooltipTrigger>
-              <Button
-                onClick={() => setOpen(true)}
-                size="xs"
-                variant="ghost"
-                className="w-fit has-[>svg]:px-1 h-fit py-1"
-              >
-                <Maximize className="text-zinc-500 size-4" />
-              </Button>
+            <TooltipTrigger asChild>
+              <div>
+                <Button
+                  onClick={() => setOpen(true)}
+                  size="xs"
+                  variant="ghost"
+                  className="w-fit has-[>svg]:px-1 h-fit py-1"
+                >
+                  <Maximize className="text-zinc-500 size-4" />
+                </Button>
+              </div>
             </TooltipTrigger>
             <TooltipContent>
               Maximize Output <Kbd cmd="⌘M" />

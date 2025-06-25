@@ -10,6 +10,8 @@ import {
   Connection,
   IndexJob,
   ConnectionSchema,
+  Column,
+  Table,
 } from "./types";
 
 export {};
@@ -18,7 +20,10 @@ interface ConnectionsApi {
   listConnections: () => Promise<Connection[]>;
   getConnection: (id: number) => Promise<Connection>;
   deleteConnections: (ids: number[]) => Promise<void>;
-  updateConnection: (id: number, values: Connection) => Promise<Connection>;
+  updateConnection: (
+    id: number,
+    values: Partial<Connection>
+  ) => Promise<Connection>;
   createConnection: (values: Omit<Connection, "id">) => Promise<Connection>;
   testConnection: (
     db: Omit<Connection, "id">
@@ -93,6 +98,18 @@ interface JobsApi {
   ) => Promise<IndexJob[]>;
 }
 
+interface ColumnsApi {
+  updateColumn: (id: number, values: Partial<Column>) => Promise<Column>;
+}
+
+interface TablesApi {
+  updateTable: (id: number, values: Partial<Table>) => Promise<Table>;
+}
+
+interface SchemasApi {
+  updateSchema: (id: number, values: Partial<Schema>) => Promise<Schema>;
+}
+
 declare global {
   interface Window {
     connections: ConnectionsApi;
@@ -102,5 +119,8 @@ declare global {
     queries: QueriesApi;
     proxy: ProxyApi;
     jobs: JobsApi;
+    columns: ColumnsApi;
+    tables: TablesApi;
+    schemas: SchemasApi;
   }
 }

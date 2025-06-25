@@ -6,18 +6,27 @@ import Sidebar from "./components/sidebar";
 import Toolbar, { AIFeaturesSettingsPage } from "./components/toolbar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { QueryDataProvider } from "./queryDataProvider";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "./components/ui/dialog";
+import { Dialog, DialogDescription, DialogTitle } from "./components/ui/dialog";
 import { Button } from "./components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { AddConnectionForm } from "./components/addDatabaseButton";
 import TomeLogo from "./components/logos/tome";
 
 function App() {
+  useEffect(() => {
+    console.log(String.raw`
+ _________  ________  _____ ______   _______      
+|\___   ___\\   __  \|\   _ \  _   \|\  ___ \     
+\|___ \  \_\ \  \|\  \ \  \\\__\ \  \ \   __/|    
+     \ \  \ \ \  \\\  \ \  \\|__| \  \ \  \_|/__  
+      \ \  \ \ \  \\\  \ \  \    \ \  \ \  \_|\ \ 
+       \ \__\ \ \_______\ \__\    \ \__\ \_______\
+        \|__|  \|_______|\|__|     \|__|\|_______|
+        
+        
+Contribute at https://github.com/joshkotrous/tome`);
+  }, []);
+
   return (
     <AppDataProvider>
       <QueryDataProvider>
@@ -68,7 +77,7 @@ function SetupWindow() {
             <DialogTitle></DialogTitle>
             <div className="size-full flex flex-col gap-8 justify-center items-center">
               <TomeLogo className="" />
-              <div className="text-zinc-400 w-xl text-center text-xl">
+              <div className="text-zinc-400 text-center text-xl">
                 The AI-native database client that translates natural language
                 into perfect queries. Ask questions in plain English and get
                 instant results.
@@ -105,7 +114,12 @@ function SetupWindow() {
             <AIFeaturesSettingsPage
               onComplete={() => setStep("add connection")}
             />
-            <Button onClick={() => setStep("add connection")}>Skip</Button>
+            <Button
+              className="w-full"
+              onClick={() => setStep("add connection")}
+            >
+              Skip
+            </Button>
           </>
         );
     }
@@ -113,9 +127,14 @@ function SetupWindow() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="dark size-full max-w-full flex justify-center items-center outline-none">
+      {/* <DialogContent className="dark size-full max-w-full flex justify-center items-center outline-none">
         <div className="space-y-2 w-full max-w-3xl">{displayStep(step)}</div>
-      </DialogContent>
+      </DialogContent> */}
+      <div className="space-y-2 size-full absolute top-0 left-0 z-50 bg-zinc-950 flex justify-center items-center">
+        <div className="size-full flex flex-col justify-center w-full max-w-3xl px-8 space-y-2 dark">
+          {displayStep(step)}
+        </div>
+      </div>
     </Dialog>
   );
 }

@@ -1,5 +1,6 @@
 import {
   ArchiveRestore,
+  Check,
   ChevronRight,
   Columns,
   DatabaseBackup,
@@ -59,8 +60,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Kbd } from "./toolbar";
 import { useAppData } from "@/applicationDataProvider";
 import { useQueryData } from "@/queryDataProvider";
+import { Textarea } from "./ui/textarea";
 
 // Add a discriminated union for selected entity
+
 type SelectedEntity =
   | { type: "connection"; value: Connection }
   | { type: "schema"; value: Schema }
@@ -117,15 +120,17 @@ export default function Sidebar() {
 
       <div className="absolute top-0.5 right-1">
         <Tooltip delayDuration={700}>
-          <TooltipTrigger>
-            <Button
-              onClick={handleOpen}
-              size="xs"
-              variant="ghost"
-              className="w-fit has-[>svg]:px-1"
-            >
-              <SidebarClose className="text-zinc-500 size-5" />
-            </Button>
+          <TooltipTrigger asChild>
+            <div>
+              <Button
+                onClick={handleOpen}
+                size="xs"
+                variant="ghost"
+                className="w-fit has-[>svg]:px-1"
+              >
+                <SidebarClose className="text-zinc-500 size-5" />
+              </Button>
+            </div>
           </TooltipTrigger>
           <TooltipContent>
             Close Sidebar <Kbd cmd="⌘B" />
@@ -776,6 +781,7 @@ function EditConnectionForm({
 
 function SidebarDetailsPanel({ selected }: { selected: SelectedEntity }) {
   const [open, setOpen] = useState(false);
+
   if (!selected) {
     return (
       <div
@@ -808,11 +814,7 @@ function SidebarDetailsPanel({ selected }: { selected: SelectedEntity }) {
               <div className="p-1.5 border-b font-mono">
                 Name: {selected.value.name}
               </div>
-              {selected.value.description && (
-                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
-                  {selected.value.description}
-                </div>
-              )}
+              <EntityDescription entity={selected} />
             </>
           )}
           {selected.type === "schema" && (
@@ -823,11 +825,7 @@ function SidebarDetailsPanel({ selected }: { selected: SelectedEntity }) {
               <div className="p-1.5 border-b font-mono">
                 Name: {selected.value.name}
               </div>
-              {selected.value.description && (
-                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
-                  {selected.value.description}
-                </div>
-              )}
+              <EntityDescription entity={selected} />
             </>
           )}
           {selected.type === "table" && (
@@ -838,11 +836,8 @@ function SidebarDetailsPanel({ selected }: { selected: SelectedEntity }) {
               <div className="p-1.5 border-b font-mono">
                 Name: {selected.value.name}
               </div>
-              {selected.value.description && (
-                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
-                  {selected.value.description}
-                </div>
-              )}
+
+              <EntityDescription entity={selected} />
             </>
           )}
           {selected.type === "column" && (
@@ -856,15 +851,104 @@ function SidebarDetailsPanel({ selected }: { selected: SelectedEntity }) {
               <div className="flex items-center gap-2 border-b font-mono p-1.5">
                 Type: {selected.value.type}
               </div>
-              {selected.value.description && (
-                <div className="p-1.5 px-2 text-zinc-300 min-h-40 max-h-48 overflow-auto">
-                  {selected.value.description}
-                </div>
-              )}
+              <EntityDescription entity={selected} />
             </>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function EntityDescription({ entity }: { entity: SelectedEntity }) {
+  const [input, setInput] = useState<string>(entity?.value.description ?? "");
+  const [editMode, setEditMode] = useState(false);
+
+  useEffect(() => {
+    setInput(entity?.value?.description ?? "");
+  }, [entity]);
+
+  if (!entity) {
+    return null;
+  }
+
+  async function handleUpdate() {
+    if (!entity) {
+      return;
+    }
+    switch (entity.type) {
+      case "connection":
+        await window.connections.updateConnection(entity?.value.id, {
+          description: input,
+        });
+        break;
+      case "column":
+        await window.columns.updateColumn(entity.value.id, {
+          description: input,
+        });
+        break;
+      case "table":
+        await window.tables.updateTable(entity.value.id, {
+          description: input,
+        });
+        break;
+      case "schema":
+        await window.schemas.updateSchema(entity.value.id, {
+          description: input,
+        });
+        break;
+    }
+    if (entity.value) {
+      entity.value.description = input;
+    }
+  }
+
+  return (
+    <div className="p-1.5 px-2 text-zinc-300 h-48 relative flex flex-col">
+      <div className="flex justify-end gap-1 items-center mb-2 flex-shrink-0">
+        <Button
+          onClick={async () => {
+            if (editMode) {
+              await handleUpdate();
+            }
+            setEditMode((prev) => !prev);
+          }}
+          variant="ghost"
+          className="!p-1 !h-fit !text-xs bg-zinc-950 hover:text-green-500"
+        >
+          {editMode ? (
+            <Check className="size-3" />
+          ) : (
+            <Pencil className="size-3" />
+          )}
+        </Button>
+        {editMode && (
+          <Button
+            onClick={() => {
+              setEditMode((prev) => !prev);
+              setInput(entity?.value.description ?? "");
+            }}
+            variant="ghost"
+            className="!p-1 !h-fit !text-xs hover:text-red-600"
+          >
+            <X className="size-3" />
+          </Button>
+        )}
+      </div>
+
+      <div className="flex-1 min-h-0">
+        {editMode ? (
+          <Textarea
+            className="!bg-transparent border-none !text-xs !p-1 !rounded-sm w-full h-full resize-none"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+          />
+        ) : (
+          <div className="overflow-y-auto h-full text-xs leading-relaxed">
+            {input}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

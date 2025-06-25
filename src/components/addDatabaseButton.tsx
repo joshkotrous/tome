@@ -34,9 +34,11 @@ export default function AddDatabaseButton({
   const [open, setOpen] = useState(false);
   return (
     <AddDatabaseDialog open={open} setOpen={setOpen}>
-      <Button size={size}>
-        <DatabaseIcon className="size-4" /> Add Connection
-      </Button>
+      <div>
+        <Button size={size}>
+          <DatabaseIcon className="size-4" /> Add Connection
+        </Button>
+      </div>
     </AddDatabaseDialog>
   );
 }
@@ -54,7 +56,9 @@ export function AddDatabaseDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogTrigger asChild>
+        <div>{children}</div>
+      </DialogTrigger>
       <DialogContent className="dark max-w-2xl">
         <DialogTitle>Add Connection</DialogTitle>
         <DialogDescription>
@@ -328,6 +332,7 @@ function SelectDatabaseEngine({
           .filter((i) => i === "Postgres")
           .map((i) => (
             <Button
+              key={i}
               onClick={() => setEngine(i)}
               className={cn(
                 `size-48 border rounded-md flex flex-col text-lg`,
