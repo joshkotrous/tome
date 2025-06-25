@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useQueryData } from "@/queryDataProvider";
 import Spinner from "./ui/spinner";
@@ -64,6 +64,81 @@ export function QueryResultTable({
 }) {
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
+  // Initialize column widths - row number column (36px) + data columns (128px each)
+  const [columnWidths, setColumnWidths] = useState<number[]>(() => {
+    if (!result) return [];
+    return [36, ...result.columns.map(() => 128)]; // First is row number column
+  });
+
+  // Handle column resize
+  const handleResize = useCallback((columnIndex: number, delta: number) => {
+    setColumnWidths((prev) => {
+      const newWidths = [...prev];
+      const minWidth = 50; // Minimum column width
+      const maxWidth = 400; // Maximum column width
+
+      newWidths[columnIndex] = Math.max(
+        minWidth,
+        Math.min(maxWidth, prev[columnIndex] + delta)
+      );
+      return newWidths;
+    });
+  }, []);
+
+  // Calculate optimal column width based on content
+  const calculateOptimalWidth = useCallback(
+    (columnIndex: number) => {
+      if (!result) return 128;
+
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return 128;
+
+      // Set font to match table font
+      ctx.font =
+        '12px ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace';
+
+      let maxWidth = 0;
+
+      if (columnIndex === 0) {
+        // Row number column - check row count digits
+        const rowCount = result.rows.length;
+        const maxRowText = rowCount.toString();
+        maxWidth = ctx.measureText(maxRowText).width + 24; // padding
+      } else {
+        const column = result.columns[columnIndex - 1];
+
+        // Measure header text
+        maxWidth = Math.max(maxWidth, ctx.measureText(column).width + 24);
+
+        // Sample up to 100 rows for performance
+        const sampleSize = Math.min(100, result.rows.length);
+        for (let i = 0; i < sampleSize; i++) {
+          const cellValue = formatCell(result.rows[i][column]);
+          const cellText = cellValue?.toString() || "";
+          maxWidth = Math.max(maxWidth, ctx.measureText(cellText).width + 24);
+        }
+      }
+
+      // Add some padding and constrain to reasonable bounds
+      return Math.max(50, Math.min(400, maxWidth + 16));
+    },
+    [result]
+  );
+
+  // Handle auto-resize for a specific column
+  const handleAutoResize = useCallback(
+    (columnIndex: number) => {
+      const optimalWidth = calculateOptimalWidth(columnIndex);
+      setColumnWidths((prev) => {
+        const newWidths = [...prev];
+        newWidths[columnIndex] = optimalWidth;
+        return newWidths;
+      });
+    },
+    [calculateOptimalWidth]
+  );
+
   // Create virtualizer for table rows - must be called before early returns
   const rowVirtualizer = useVirtualizer({
     count: result?.rows.length || 0,
@@ -73,7 +148,6 @@ export function QueryResultTable({
   });
 
   if (!result) return null;
-
   if (result.rowCount === 0)
     return (
       <div
@@ -86,28 +160,41 @@ export function QueryResultTable({
   return (
     <div
       ref={tableContainerRef}
-      className={`pb-9 flex-1 min-h-0 text-nowrap overflow-auto text-sm text-zinc-200 font-mono select-none ${className}`}
+      className={`pb-9 flex-1 min-h-0 text-nowrap overflow-auto text-sm text-zinc-200 font-mono ${className}`}
     >
       <div className="min-w-full">
         {/* Fixed Header */}
         <div className="sticky w-fit top-0 bg-zinc-950 z-10 border-b border-zinc-700">
           <div className="flex w-fit text-sm">
             {/* Row number header */}
-            <div className="w-9 px-3 py-1 text-left font-semibold whitespace-nowrap flex-shrink-0 border-r border-zinc-700">
+            <div
+              className="px-3 py-1 text-left font-semibold whitespace-nowrap flex-shrink-0 border-r border-zinc-700 relative"
+              style={{ width: `${columnWidths[0]}px` }}
+            >
               #
+              <ResizeHandle
+                onResize={(delta) => handleResize(0, delta)}
+                onAutoResize={() => handleAutoResize(0)}
+                className="right-0"
+              />
             </div>
             {/* Data column headers */}
-            {result.columns.map((c) => (
+            {result.columns.map((c, index) => (
               <div
                 key={c}
-                className="w-32 px-3 py-1 text-left flex items-center font-semibold whitespace-nowrap flex-shrink-0 text-xs border-zinc-700 border-r text-nowrap overflow-hidden"
+                className="px-3 py-1 text-left flex items-center font-semibold whitespace-nowrap flex-shrink-0 text-xs border-zinc-700 border-r text-nowrap overflow-hidden relative"
+                style={{ width: `${columnWidths[index + 1]}px` }}
               >
                 {c}
+                <ResizeHandle
+                  onResize={(delta) => handleResize(index + 1, delta)}
+                  onAutoResize={() => handleAutoResize(index + 1)}
+                  className="right-0"
+                />
               </div>
             ))}
           </div>
         </div>
-
         {/* Virtualized Rows */}
         <div
           style={{
@@ -136,15 +223,18 @@ export function QueryResultTable({
               >
                 <div className="flex w-fit border-b border-zinc-800 text-xs hover:bg-zinc-950/75 transition-all">
                   {/* Row number cell */}
-                  <div className="bg-zinc-950/50 w-9 px-3 py-1 text-zinc-400 text-right font-medium flex-shrink-0 border-r border-zinc-800">
+                  <div
+                    className="bg-zinc-950/50 px-3 py-1 text-zinc-400 text-right font-medium flex-shrink-0 border-r border-zinc-800"
+                    style={{ width: `${columnWidths[0]}px` }}
+                  >
                     {virtualRow.index + 1}
                   </div>
                   {/* Data cells */}
-                  {result.columns.map((c) => (
+                  {result.columns.map((c, index) => (
                     <div
                       key={c}
-                      className="px-3 py-1 overflow-hidden  text-ellipsis flex-shrink-0 text-xs border-r border-zinc-700"
-                      style={{ width: "128px" }}
+                      className="px-3 py-1 overflow-hidden text-ellipsis flex-shrink-0 text-xs border-r border-zinc-700"
+                      style={{ width: `${columnWidths[index + 1]}px` }}
                     >
                       {formatCell(row[c])}
                     </div>
@@ -156,6 +246,80 @@ export function QueryResultTable({
         </div>
       </div>
     </div>
+  );
+}
+
+// Resize handle component
+function ResizeHandle({
+  onResize,
+  onAutoResize,
+  className = "",
+}: {
+  onResize: (delta: number) => void;
+  onAutoResize: () => void;
+  className?: string;
+}) {
+  const [isResizing, setIsResizing] = useState(false);
+  const startXRef = useRef<number>(0);
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsResizing(true);
+      startXRef.current = e.clientX;
+
+      const handleMouseMove = (e: MouseEvent) => {
+        const delta = e.clientX - startXRef.current;
+        onResize(delta);
+        startXRef.current = e.clientX;
+      };
+
+      const handleMouseUp = () => {
+        setIsResizing(false);
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [onResize]
+  );
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (clickTimeoutRef.current) {
+        // Double click detected
+        clearTimeout(clickTimeoutRef.current);
+        clickTimeoutRef.current = null;
+        onAutoResize();
+      } else {
+        // First click - wait for potential second click
+        clickTimeoutRef.current = setTimeout(() => {
+          clickTimeoutRef.current = null;
+        }, 300);
+      }
+    },
+    [onAutoResize]
+  );
+
+  return (
+    <div
+      className={`absolute top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/50 transition-colors ${
+        isResizing ? "bg-blue-500" : ""
+      } ${className}`}
+      onMouseDown={handleMouseDown}
+      onClick={handleClick}
+      style={{ transform: "translateX(50%)" }}
+    />
   );
 }
 
