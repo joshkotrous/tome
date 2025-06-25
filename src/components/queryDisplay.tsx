@@ -4,13 +4,75 @@ import { useQueryData } from "@/queryDataProvider";
 import Spinner from "./ui/spinner";
 import { JsonQueryResult } from "core/connections";
 import { Button } from "./ui/button";
-import { Check, FileOutput, X } from "lucide-react";
+import { Check, Copy, FileOutput, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+import { FaFileCsv, FaFileExcel, FaMarkdown } from "react-icons/fa";
 
 export default function QueryDisplay() {
   const { loadingQuery, queryResult, queryError } = useQueryData();
+  const [selectedRecords, setSelectedRecords] = useState<Set<number>>(
+    new Set()
+  );
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(
+    null
+  );
+
+  // Handle record selection with click and shift-click
+  const handleRecordClick = useCallback(
+    (index: number, shiftKey: boolean, ctrlKey: boolean) => {
+      setSelectedRecords((prev) => {
+        const newSet = new Set(prev);
+
+        if (shiftKey && lastSelectedIndex !== null) {
+          // Shift-click: select range
+          const start = Math.min(lastSelectedIndex, index);
+          const end = Math.max(lastSelectedIndex, index);
+          for (let i = start; i <= end; i++) {
+            newSet.add(i);
+          }
+        } else if (ctrlKey || (!shiftKey && !ctrlKey && prev.has(index))) {
+          // Ctrl-click or clicking already selected: toggle
+          if (newSet.has(index)) {
+            newSet.delete(index);
+          } else {
+            newSet.add(index);
+          }
+        } else {
+          // Regular click: select only this record
+          newSet.clear();
+          newSet.add(index);
+        }
+
+        return newSet;
+      });
+
+      setLastSelectedIndex(index);
+    },
+    [lastSelectedIndex]
+  );
+
+  // Clear selection
+  const clearSelection = useCallback(() => {
+    setSelectedRecords(new Set());
+    setLastSelectedIndex(null);
+  }, []);
+
   return (
     <div className="flex flex-col h-full min-h-0">
-      <QueryToolbar />
+      <QueryToolbar
+        totalCount={queryResult?.rowCount ?? 0}
+        selectedRecords={[]}
+        onClearSelection={clearSelection}
+      />
       {loadingQuery && (
         <div className="flex flex-1 gap-2 items-center justify-center">
           <Spinner />
@@ -18,20 +80,157 @@ export default function QueryDisplay() {
         </div>
       )}
       {queryError && <div className="font-mono text-xs p-2">{queryError}</div>}
-      {!loadingQuery && <QueryResultTable result={queryResult} />}
+      {!loadingQuery && (
+        <QueryResultTable
+          result={queryResult}
+          selectedRecords={selectedRecords}
+          onRecordClick={handleRecordClick}
+        />
+      )}
     </div>
   );
 }
 
-function QueryToolbar() {
+function QueryToolbar({
+  selectedRecords,
+  totalCount,
+  onClearSelection,
+}: {
+  selectedRecords: any[];
+  totalCount: number;
+  onClearSelection: () => void;
+}) {
   return (
     <div className="w-full flex justify-between items-center p-1.5 border-b border-zinc-800 flex-shrink-0">
       <div className="text-sm flex gap-1.5 items-center">
-        <Button size="xs" className="bg-zinc-950/50">
-          <FileOutput className="size-3" /> Export
-        </Button>
+        <ExportDropdown selectedRecords={[]} />
+
+        <CopyDropdown selectedRecords={[]} />
       </div>
+      {selectedRecords.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={onClearSelection}
+            className="text-zinc-400 hover:text-zinc-200"
+          >
+            Clear Selection
+          </Button>
+          <div className="text-xs text-zinc-400">
+            {selectedRecords.length} of {totalCount} selected
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function ExportDropdown({ selectedRecords }: { selectedRecords: any[] }) {
+  const handleExport = () => {
+    // Export functionality here - you have access to selectedCount
+    if (selectedRecords.length > 0) {
+      console.log(`Exporting ${selectedRecords.length} selected records`);
+    }
+  };
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger>
+        <Button size="xs" className="bg-zinc-950/50" onClick={handleExport}>
+          <FileOutput className="size-3" />
+          Export
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="dark">
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="!h-fit !p-0 !px-1">
+            <DropdownMenuItem>Export All</DropdownMenuItem>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem>
+              {" "}
+              <FaFileCsv />
+              CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem>
+              <FaFileExcel />
+              Excel
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger
+            className="!h-fit !p-0 !px-1"
+            disabled={selectedRecords.length === 0}
+          >
+            <DropdownMenuItem disabled={selectedRecords.length === 0}>
+              Export Selected
+            </DropdownMenuItem>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem>CSV</DropdownMenuItem>
+            <DropdownMenuItem>
+              <FaFileExcel />
+              Excel
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function CopyDropdown({ selectedRecords }: { selectedRecords: any[] }) {
+  const handleExport = () => {
+    // Export functionality here - you have access to selectedCount
+    if (selectedRecords.length > 0) {
+      console.log(`Exporting ${selectedRecords.length} selected records`);
+    }
+  };
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger>
+        <Button size="xs" className="bg-zinc-950/50" onClick={handleExport}>
+          <Copy className="size-3" />
+          Copy
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="dark">
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="!h-fit !p-0 !px-1">
+            <DropdownMenuItem>Copy All</DropdownMenuItem>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem>
+              {" "}
+              <FaFileCsv />
+              CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem>
+              <FaMarkdown />
+              Markdown
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger
+            className="!h-fit !p-0 !px-1"
+            disabled={selectedRecords.length === 0}
+          >
+            <DropdownMenuItem disabled={selectedRecords.length === 0}>
+              Copy Selected
+            </DropdownMenuItem>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem>CSV</DropdownMenuItem>
+            <DropdownMenuItem>
+              <FaMarkdown />
+              Markdown
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -57,9 +256,13 @@ export function QueryStatus() {
 
 export function QueryResultTable({
   result,
+  selectedRecords,
+  onRecordClick,
   className = "",
 }: {
   result: JsonQueryResult | null | undefined;
+  selectedRecords: Set<number>;
+  onRecordClick: (index: number, shiftKey: boolean, ctrlKey: boolean) => void;
   className?: string;
 }) {
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -67,15 +270,15 @@ export function QueryResultTable({
   // Initialize column widths - row number column (36px) + data columns (128px each)
   const [columnWidths, setColumnWidths] = useState<number[]>(() => {
     if (!result) return [];
-    return [36, ...result.columns.map(() => 128)]; // First is row number column
+    return [36, ...result.columns.map(() => 128)]; // Row number, then data columns
   });
 
   // Handle column resize
   const handleResize = useCallback((columnIndex: number, delta: number) => {
     setColumnWidths((prev) => {
       const newWidths = [...prev];
-      const minWidth = 50; // Minimum column width
-      const maxWidth = 400; // Maximum column width
+      const minWidth = 50;
+      const maxWidth = 400;
 
       newWidths[columnIndex] = Math.max(
         minWidth,
@@ -106,7 +309,7 @@ export function QueryResultTable({
         const maxRowText = rowCount.toString();
         maxWidth = ctx.measureText(maxRowText).width + 24; // padding
       } else {
-        const column = result.columns[columnIndex - 1];
+        const column = result.columns[columnIndex - 1]; // Adjust for row number column
 
         // Measure header text
         maxWidth = Math.max(maxWidth, ctx.measureText(column).width + 24);
@@ -168,7 +371,7 @@ export function QueryResultTable({
           <div className="flex w-fit text-sm">
             {/* Row number header */}
             <div
-              className="px-3 py-1 text-left font-semibold whitespace-nowrap flex-shrink-0 border-r border-zinc-700 relative"
+              className="text-zinc-500 px-3 py-1 text-left font-semibold whitespace-nowrap flex-shrink-0 border-r border-zinc-700 relative"
               style={{ width: `${columnWidths[0]}px` }}
             >
               #
@@ -205,6 +408,8 @@ export function QueryResultTable({
         >
           {rowVirtualizer.getVirtualItems().map((virtualRow) => {
             const row = result.rows[virtualRow.index];
+            const isSelected = selectedRecords.has(virtualRow.index);
+
             return (
               <div
                 key={virtualRow.key}
@@ -217,11 +422,20 @@ export function QueryResultTable({
                   width: "100%",
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
-                className={
-                  virtualRow.index % 2 ? "bg-zinc-900/40" : "bg-zinc-900/20"
-                }
               >
-                <div className="flex w-fit border-b border-zinc-800 text-xs hover:bg-zinc-950/75 transition-all">
+                <div
+                  className={cn(
+                    "flex w-fit border-b border-zinc-800 text-xs hover:bg-zinc-950/75 transition-all cursor-pointer select-none",
+                    isSelected && "bg-zinc-950"
+                  )}
+                  onClick={(e) =>
+                    onRecordClick(
+                      virtualRow.index,
+                      e.shiftKey,
+                      e.ctrlKey || e.metaKey
+                    )
+                  }
+                >
                   {/* Row number cell */}
                   <div
                     className="bg-zinc-950/50 px-3 py-1 text-zinc-400 text-right font-medium flex-shrink-0 border-r border-zinc-800"
@@ -266,6 +480,7 @@ function ResizeHandle({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
+      e.stopPropagation(); // Prevent row selection when dragging resize handle
       setIsResizing(true);
       startXRef.current = e.clientX;
 
@@ -294,7 +509,7 @@ function ResizeHandle({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopPropagation(); // Prevent row selection when clicking resize handle
 
       if (clickTimeoutRef.current) {
         // Double click detected
@@ -313,7 +528,7 @@ function ResizeHandle({
 
   return (
     <div
-      className={`absolute top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/50 transition-colors ${
+      className={`absolute top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/50 transition-colors z-10 ${
         isResizing ? "bg-blue-500" : ""
       } ${className}`}
       onMouseDown={handleMouseDown}
