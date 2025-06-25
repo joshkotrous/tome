@@ -369,7 +369,7 @@ export function DatabaseSwitcher() {
           </div>
         </TooltipTrigger>
 
-        <SelectContent className="dark">
+        <SelectContent className="">
           {connections.map((connection) => (
             <SelectItem key={connection.id} value={connection.id.toString()}>
               {connection.name}
@@ -420,7 +420,7 @@ export function QuerySwitcher() {
           </div>
         </TooltipTrigger>
 
-        <SelectContent className="dark">
+        <SelectContent className="">
           {queries.map((query) => (
             <SelectItem key={query.id} value={query.id.toString()}>
               {query.title}
@@ -642,7 +642,7 @@ function DeleteConversation({
       <DialogTrigger>
         <Trash className="size-3.5 hover:text-red-500 transition-all" />
       </DialogTrigger>
-      <DialogContent className="dark">
+      <DialogContent className="">
         <DialogTitle>Delete conversation?</DialogTitle>
         <DialogDescription>
           This conversation and all its associated data will be removed
@@ -832,7 +832,7 @@ function ModelPicker({
         <AIProviderLogo className="size-3.5" provider={model.provider} />
         {model.name}
       </SelectTrigger>
-      <SelectContent className="dark">
+      <SelectContent className="">
         {shouldGroupByProvider
           ? // Group models by provider when both are available
             Object.entries(groupedModels).map(([provider, models]) => (

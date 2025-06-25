@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { FaFileCsv, FaFileExcel, FaMarkdown } from "react-icons/fa";
+import { toast } from "sonner";
 
 export default function QueryDisplay() {
   const { loadingQuery, queryResult, queryError } = useQueryData();
@@ -69,6 +70,7 @@ export default function QueryDisplay() {
   return (
     <div className="flex flex-col h-full min-h-0">
       <QueryToolbar
+        queryResult={queryResult}
         totalCount={queryResult?.rowCount ?? 0}
         selectedRecords={[]}
         onClearSelection={clearSelection}
@@ -92,10 +94,12 @@ export default function QueryDisplay() {
 }
 
 function QueryToolbar({
+  queryResult,
   selectedRecords,
   totalCount,
   onClearSelection,
 }: {
+  queryResult: JsonQueryResult | null;
   selectedRecords: any[];
   totalCount: number;
   onClearSelection: () => void;
@@ -103,9 +107,9 @@ function QueryToolbar({
   return (
     <div className="w-full flex justify-between items-center p-1.5 border-b border-zinc-800 flex-shrink-0">
       <div className="text-sm flex gap-1.5 items-center">
-        <ExportDropdown selectedRecords={[]} />
+        <ExportDropdown queryResult={queryResult} selectedRecords={[]} />
 
-        <CopyDropdown selectedRecords={[]} />
+        <CopyDropdown queryResult={queryResult} selectedRecords={[]} />
       </div>
       {selectedRecords.length > 0 && (
         <div className="flex items-center gap-1.5">
@@ -126,28 +130,137 @@ function QueryToolbar({
   );
 }
 
-function ExportDropdown({ selectedRecords }: { selectedRecords: any[] }) {
-  const handleExport = () => {
-    // Export functionality here - you have access to selectedCount
-    if (selectedRecords.length > 0) {
-      console.log(`Exporting ${selectedRecords.length} selected records`);
-    }
-  };
+export function ExportDropdown({
+  queryResult,
+  selectedRecords,
+}: {
+  queryResult: JsonQueryResult | null;
+  selectedRecords: any[];
+}) {
+  const convertToCSV = useCallback((data: any[], columns: string[]) => {
+    const headers = columns.join(",");
+    const rows = data.map((row) =>
+      columns
+        .map((col) => {
+          const value = row[col];
+          // Handle values that might contain commas, quotes, or newlines
+          if (value === null || value === undefined) return "";
+          const stringValue = String(value);
+          if (
+            stringValue.includes(",") ||
+            stringValue.includes('"') ||
+            stringValue.includes("\n")
+          ) {
+            return `"${stringValue.replace(/"/g, '""')}"`;
+          }
+          return stringValue;
+        })
+        .join(",")
+    );
+    return [headers, ...rows].join("\n");
+  }, []);
+
+  // Helper function to convert data to Excel format (simple TSV for Excel compatibility)
+  const convertToExcel = useCallback((data: any[], columns: string[]) => {
+    const headers = columns.join("\t");
+    const rows = data.map((row) =>
+      columns
+        .map((col) => {
+          const value = row[col];
+          if (value === null || value === undefined) return "";
+          return String(value).replace(/\t/g, " "); // Replace tabs with spaces
+        })
+        .join("\t")
+    );
+    return [headers, ...rows].join("\n");
+  }, []);
+
+  // Function to trigger file download
+  const downloadFile = useCallback(
+    (content: string, filename: string, mimeType: string) => {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+
+      // Create a temporary anchor element to trigger download
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.style.display = "none";
+
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Clean up the URL object
+      URL.revokeObjectURL(url);
+    },
+    []
+  );
+
+  const handleExport = useCallback(
+    (format: "csv" | "excel", type: "all" | "selected") => {
+      if (!queryResult) {
+        console.warn("No query result available for export");
+        return;
+      }
+
+      // Determine which data to export
+      const dataToExport =
+        type === "selected" ? selectedRecords : queryResult.rows;
+      const columns = queryResult.columns;
+
+      if (dataToExport.length === 0) {
+        console.warn("No data to export");
+        return;
+      }
+
+      // Generate filename with timestamp
+      const timestamp = new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[:.]/g, "-");
+      const recordCount =
+        type === "selected" ? selectedRecords.length : queryResult.rowCount;
+      const typeLabel = type === "selected" ? "selected" : "all";
+
+      let content: string;
+      let filename: string;
+      let mimeType: string;
+
+      if (format === "csv") {
+        content = convertToCSV(dataToExport, columns);
+        filename = `query-results-${typeLabel}-${recordCount}-records-${timestamp}.csv`;
+        mimeType = "text/csv;charset=utf-8;";
+      } else {
+        // excel
+        content = convertToExcel(dataToExport, columns);
+        filename = `query-results-${typeLabel}-${recordCount}-records-${timestamp}.xlsx`;
+        mimeType =
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      }
+
+      // Trigger the download
+      downloadFile(content, filename, mimeType);
+    },
+    [queryResult, selectedRecords, convertToCSV, convertToExcel, downloadFile]
+  );
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger>
-        <Button size="xs" className="bg-zinc-950/50" onClick={handleExport}>
+        <Button size="xs" className="bg-zinc-950/50">
           <FileOutput className="size-3" />
           Export
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="dark">
+      <DropdownMenuContent className="">
         <DropdownMenuSub>
           <DropdownMenuSubTrigger className="!h-fit !p-0 !px-1">
             <DropdownMenuItem>Export All</DropdownMenuItem>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExport("csv", "all")}>
               {" "}
               <FaFileCsv />
               CSV
@@ -180,33 +293,157 @@ function ExportDropdown({ selectedRecords }: { selectedRecords: any[] }) {
   );
 }
 
-function CopyDropdown({ selectedRecords }: { selectedRecords: any[] }) {
-  const handleExport = () => {
-    // Export functionality here - you have access to selectedCount
-    if (selectedRecords.length > 0) {
-      console.log(`Exporting ${selectedRecords.length} selected records`);
+export function CopyDropdown({
+  selectedRecords,
+  queryResult,
+}: {
+  queryResult: JsonQueryResult | null;
+  selectedRecords: any[];
+}) {
+  // Helper function to convert data to CSV format
+  const convertToCSV = useCallback((data: any[], columns: string[]) => {
+    const headers = columns.join(",");
+    const rows = data.map((row) =>
+      columns
+        .map((col) => {
+          const value = row[col];
+          // Handle values that might contain commas, quotes, or newlines
+          if (value === null || value === undefined) return "";
+          const stringValue = String(value);
+          if (
+            stringValue.includes(",") ||
+            stringValue.includes('"') ||
+            stringValue.includes("\n")
+          ) {
+            return `"${stringValue.replace(/"/g, '""')}"`;
+          }
+          return stringValue;
+        })
+        .join(",")
+    );
+    return [headers, ...rows].join("\n");
+  }, []);
+
+  // Helper function to convert data to Markdown table format
+  const convertToMarkdown = useCallback((data: any[], columns: string[]) => {
+    if (data.length === 0) return "";
+
+    // Create header row
+    const headerRow = `| ${columns.join(" | ")} |`;
+
+    // Create separator row
+    const separatorRow = `| ${columns.map(() => "---").join(" | ")} |`;
+
+    // Create data rows
+    const dataRows = data.map((row) => {
+      const cells = columns.map((col) => {
+        const value = row[col];
+        if (value === null || value === undefined) return "";
+        // Escape pipe characters in cell content
+        return String(value).replace(/\|/g, "\\|").replace(/\n/g, "<br>");
+      });
+      return `| ${cells.join(" | ")} |`;
+    });
+
+    return [headerRow, separatorRow, ...dataRows].join("\n");
+  }, []);
+
+  // Function to copy text to clipboard
+  const copyToClipboard = useCallback(async (text: string) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        // Use the modern Clipboard API if available
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback for older browsers or non-secure contexts
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      return true;
+    } catch (err) {
+      console.error("Failed to copy to clipboard:", err);
+      return false;
     }
-  };
+  }, []);
+
+  const handleCopy = useCallback(
+    async (format: "csv" | "markdown", type: "all" | "selected") => {
+      if (!queryResult) {
+        console.warn("No query result available for copying");
+        return;
+      }
+
+      // Determine which data to copy
+      const dataToCopy =
+        type === "selected" ? selectedRecords : queryResult.rows;
+      const columns = queryResult.columns;
+
+      if (dataToCopy.length === 0) {
+        console.warn("No data to copy");
+        return;
+      }
+
+      let content: string;
+
+      if (format === "csv") {
+        content = convertToCSV(dataToCopy, columns);
+      } else {
+        // markdown
+        content = convertToMarkdown(dataToCopy, columns);
+      }
+
+      // Copy to clipboard
+      const success = await copyToClipboard(content);
+
+      if (success) {
+        const recordCount = dataToCopy.length;
+        const typeLabel = type === "selected" ? "selected" : "all";
+        console.log(
+          `Copied ${recordCount} ${typeLabel} records as ${format.toUpperCase()} to clipboard`
+        );
+        toast.success("Successfully copied to clipboard");
+      } else {
+        console.error("Failed to copy to clipboard");
+      }
+    },
+    [
+      queryResult,
+      selectedRecords,
+      convertToCSV,
+      convertToMarkdown,
+      copyToClipboard,
+    ]
+  );
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger>
-        <Button size="xs" className="bg-zinc-950/50" onClick={handleExport}>
+        <Button size="xs" className="bg-zinc-950/50">
           <Copy className="size-3" />
           Copy
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="dark">
+      <DropdownMenuContent className="">
         <DropdownMenuSub>
           <DropdownMenuSubTrigger className="!h-fit !p-0 !px-1">
             <DropdownMenuItem>Copy All</DropdownMenuItem>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopy("csv", "all")}>
               {" "}
               <FaFileCsv />
               CSV
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopy("markdown", "all")}>
               <FaMarkdown />
               Markdown
             </DropdownMenuItem>
@@ -222,8 +459,12 @@ function CopyDropdown({ selectedRecords }: { selectedRecords: any[] }) {
             </DropdownMenuItem>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            <DropdownMenuItem>CSV</DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleCopy("csv", "selected")}>
+              CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => handleCopy("markdown", "selected")}
+            >
               <FaMarkdown />
               Markdown
             </DropdownMenuItem>

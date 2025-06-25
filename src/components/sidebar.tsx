@@ -608,7 +608,7 @@ function ConnectionListContextMenu({
             setOpen={setDeleteOpen}
           />
           <Dialog open={errorOpen} onOpenChange={setErrorOpen}>
-            <DialogContent className="dark">
+            <DialogContent className="">
               <DialogTitle>Connection Failed</DialogTitle>
               <div className="flex gap-2 items-center font-semibold">
                 <X className="text-red-500" /> Failed to connect to {item.name}
@@ -713,7 +713,7 @@ function DeleteDatabaseDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="dark">
+      <DialogContent className="">
         <DialogTitle>Remove {database.name}?</DialogTitle>
         <DialogDescription>
           Tome will no longer have access to this database
@@ -755,7 +755,7 @@ function EditConnectionForm({
   }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="dark">
+      <DialogContent className="">
         <DialogTitle>Edit Connection</DialogTitle>
         <DialogDescription>Edit Connection Details</DialogDescription>
         <ConnectionDetailsForm values={details} onChange={setDetails} />

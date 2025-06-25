@@ -11,6 +11,8 @@ import { Button } from "./components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { AddConnectionForm } from "./components/addDatabaseButton";
 import TomeLogo from "./components/logos/tome";
+import { Toaster } from "./components/ui/sonner";
+import { ThemeProvider } from "./themeProvider";
 
 function App() {
   useEffect(() => {
@@ -28,23 +30,27 @@ Contribute at https://github.com/joshkotrous/tome`);
   }, []);
 
   return (
-    <AppDataProvider>
-      <QueryDataProvider>
-        <TooltipProvider>
-          <SetupWindow />
-          <div className="w-full h-full bg-zinc-950 flex flex-col dark overflow-hidden">
-            <Toolbar />
-            <div className=" flex-1 flex min-h-0">
-              <Sidebar />
-              <div className="flex-1 flex flex-col min-w-0">
-                <QueryInterface />
+    <ThemeProvider>
+      <AppDataProvider>
+        <QueryDataProvider>
+          <TooltipProvider>
+            <Toaster />
+
+            <SetupWindow />
+            <div className="w-full h-full bg-zinc-950 flex flex-col dark overflow-hidden">
+              <Toolbar />
+              <div className=" flex-1 flex min-h-0">
+                <Sidebar />
+                <div className="flex-1 flex flex-col min-w-0">
+                  <QueryInterface />
+                </div>
               </div>
+              <BottomBar />
             </div>
-            <BottomBar />
-          </div>
-        </TooltipProvider>
-      </QueryDataProvider>
-    </AppDataProvider>
+          </TooltipProvider>
+        </QueryDataProvider>
+      </AppDataProvider>
+    </ThemeProvider>
   );
 }
 

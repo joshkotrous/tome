@@ -132,7 +132,7 @@ function SelectConnectionDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="dark max-w-2xl">
+      <DialogContent className=" max-w-2xl">
         <DialogTitle>Select Connection</DialogTitle>
         {onlyActiveConnections && (
           <ConnectionList
@@ -229,7 +229,7 @@ function SettingsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="dark max-w-2xl">
+      <DialogContent className=" max-w-2xl">
         <DialogTitle>Settings</DialogTitle>
         <DialogDescription>Manage your workspace settings</DialogDescription>
         <div className="flex size-full gap-4">
@@ -495,7 +495,7 @@ function NavCmd(props: {
       <AddDatabaseDialog open={addDatabaseOpen} setOpen={setAddDatabaseOpen} />
       <CommandDialog
         {...props}
-        className="rounded-lg border shadow-md w-[34rem] dark"
+        className="rounded-lg border shadow-md w-[34rem]"
       >
         <CommandInput placeholder="Type a command or search..." />
         <CommandList>

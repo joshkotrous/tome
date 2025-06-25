@@ -6,13 +6,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
+
 html,
 body,
-#root {
+#root {  
   @apply h-full bg-zinc-950 text-white antialiased;
 }
 
+
 @theme inline {
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -49,6 +52,7 @@ body,
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
   --font-serif: "Instrument Serif";
+  
 }
 
 .dark {
@@ -92,7 +96,9 @@ body,
   body {
     @apply bg-background text-foreground;
   }
+
 }
+
 
 :root {
   --main: oklch(0.97 0 0);

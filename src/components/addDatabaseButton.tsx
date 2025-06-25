@@ -59,7 +59,7 @@ export function AddDatabaseDialog({
       <DialogTrigger asChild>
         <div>{children}</div>
       </DialogTrigger>
-      <DialogContent className="dark max-w-2xl">
+      <DialogContent className=" max-w-2xl">
         <DialogTitle>Add Connection</DialogTitle>
         <DialogDescription>
           Configure a new database connection
@@ -260,7 +260,7 @@ export function TestConnectionButton({
           Test Connection
         </Button>
       </DialogTrigger>
-      <DialogContent className="dark h-96 flex flex-col justify-between">
+      <DialogContent className=" h-96 flex flex-col justify-between">
         <div className="space-y-4">
           <DialogTitle>Test Connection</DialogTitle>
           {status && !status.connected && (
