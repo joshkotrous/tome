@@ -5,6 +5,7 @@
 <p align="center">
   <img src="https://img.shields.io/github/v/release/joshkotrous/tome" alt="Release" width="100" />
   <img src="https://img.shields.io/github/actions/workflow/status/joshkotrous/tome/release.yml" alt="Release" width="100" />
+  <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="Release" width="140" />
 </p>
 <p align="center">
   <img src="https://pensar-brand-assets.s3.us-east-1.amazonaws.com/secured-with-pensar-badge.svg?=update" alt="Pensar" width="160" />
