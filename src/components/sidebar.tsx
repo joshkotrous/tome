@@ -186,7 +186,6 @@ function ConnectionList({
     </ConnectionListContextMenu>
   );
 }
-
 function ConnectionListItem({
   item,
   selected,
@@ -207,7 +206,7 @@ function ConnectionListItem({
           <div
             onClick={() => setOpen((open) => !open)}
             className={cn(
-              "sticky top-0 left-0  z-10 flex bg-zinc-900 justify-between gap-2 items-center hover:bg-zinc-800",
+              "sticky top-0 left-0 z-10 flex min-w-0 bg-zinc-900 justify-between items-center hover:bg-zinc-800",
               selected?.id === item.id && "bg-zinc-800"
             )}
           >
@@ -217,14 +216,19 @@ function ConnectionListItem({
                 onSelect({ type: "connection", value: item });
               }}
               className={cn(
-                "w-full w-fit border-zinc-800 px-2 p-1 transition-all flex gap-1 items-center text-sm text-nowrap"
+                "min-w-0 flex-1 border-zinc-800 px-2 p-1 transition-all flex gap-1 items-center text-sm"
               )}
             >
               <DBInformation db={item} />
             </div>
-            <ChevronRight
-              className={cn("size-5 text-zinc-400", open && "rotate-90")}
-            />
+            <div className="flex-shrink-0 px-2">
+              <ChevronRight
+                className={cn(
+                  "size-5 text-zinc-400 transition-transform",
+                  open && "rotate-90"
+                )}
+              />
+            </div>
           </div>
           {open && <DatabaseList connection={item} onSelect={onSelect} />}
         </div>
@@ -240,7 +244,7 @@ export function DBInformation({ db }: { db: Connection }) {
   function displayLogo(engine: DatabaseEngine) {
     switch (engine) {
       case "Postgres":
-        return <PostgresLogo className="size-3" />;
+        return <PostgresLogo className="size-3 flex-shrink-0" />;
     }
   }
 
@@ -250,30 +254,37 @@ export function DBInformation({ db }: { db: Connection }) {
   }
 
   useEffect(() => {
-    // Initial data fetch
     getData();
 
-    // Set up interval to refresh every 3 seconds
     const interval = setInterval(getData, 3000);
 
-    // Cleanup interval on component unmount
     return () => clearInterval(interval);
-  }, [db.id]); // Added db.id as dependency to restart interval if db changes
+  }, [db.id]);
 
   return (
-    <div className="flex items-center gap-2 pl-1">
-      {loading && <Spinner />}
-      {connected.some((i) => i.id === db.id) && (
-        <div className="aspect-square size-2 bg-green-500 rounded-full blur-[2px]" />
-      )}
-      {indexJobs.length > 0 && (
-        <div>
-          <RefreshCcw className="size-3 animate-spin text-zinc-400" />{" "}
-        </div>
-      )}
-      {displayLogo(db.engine)}
-      {db.name}
-      <span className="text-zinc-400 text-xs pl-1">{db.connection.host}</span>
+    <div className="flex items-center gap-2 pl-1 min-w-0 max-w-full">
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {loading && <Spinner />}
+        {connected.some((i) => i.id === db.id) && (
+          <div className="aspect-square size-2 bg-green-500 rounded-full blur-[2px]" />
+        )}
+        {indexJobs.length > 0 && (
+          <RefreshCcw className="size-3 animate-spin text-zinc-400" />
+        )}
+        {displayLogo(db.engine)}
+      </div>
+
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <span className="font-medium truncate max-w-30 flex-shrink-0 ">
+          {db.name}
+        </span>
+        <Tooltip delayDuration={700}>
+          <TooltipTrigger className=" truncate min-w-0 text-zinc-400">
+            <span className="text-zinc-400 text-xs">{db.connection.host}</span>
+          </TooltipTrigger>
+          <TooltipContent>{db.connection.host}</TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   );
 }
