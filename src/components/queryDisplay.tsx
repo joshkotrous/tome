@@ -20,7 +20,8 @@ import { toast } from "sonner";
 
 export default function QueryDisplay() {
   const { loadingQuery, queryResult, queryError } = useQueryData();
-  const [selectedRecords, setSelectedRecords] = useState<Set<number>>(
+  const [selectedRecords, setSelectedRecords] = useState<any[]>([]);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(
     new Set()
   );
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(
@@ -30,7 +31,9 @@ export default function QueryDisplay() {
   // Handle record selection with click and shift-click
   const handleRecordClick = useCallback(
     (index: number, shiftKey: boolean, ctrlKey: boolean) => {
-      setSelectedRecords((prev) => {
+      if (!queryResult) return;
+
+      setSelectedIndices((prev) => {
         const newSet = new Set(prev);
 
         if (shiftKey && lastSelectedIndex !== null) {
@@ -53,17 +56,22 @@ export default function QueryDisplay() {
           newSet.add(index);
         }
 
+        // Update selected records based on new indices
+        const newRecords = Array.from(newSet).map(i => queryResult.rows[i]);
+        setSelectedRecords(newRecords);
+
         return newSet;
       });
 
       setLastSelectedIndex(index);
     },
-    [lastSelectedIndex]
+    [lastSelectedIndex, queryResult]
   );
 
   // Clear selection
   const clearSelection = useCallback(() => {
-    setSelectedRecords(new Set());
+    setSelectedRecords([]);
+    setSelectedIndices(new Set());
     setLastSelectedIndex(null);
   }, []);
 
@@ -72,7 +80,7 @@ export default function QueryDisplay() {
       <QueryToolbar
         queryResult={queryResult}
         totalCount={queryResult?.rowCount ?? 0}
-        selectedRecords={[]}
+        selectedRecords={selectedRecords}
         onClearSelection={clearSelection}
       />
       {loadingQuery && (
@@ -85,7 +93,7 @@ export default function QueryDisplay() {
       {!loadingQuery && (
         <QueryResultTable
           result={queryResult}
-          selectedRecords={selectedRecords}
+          selectedRecords={selectedIndices}
           onRecordClick={handleRecordClick}
         />
       )}
@@ -107,9 +115,15 @@ function QueryToolbar({
   return (
     <div className="w-full flex justify-between items-center p-1.5 border-b border-zinc-800 flex-shrink-0">
       <div className="text-sm flex gap-1.5 items-center">
-        <ExportDropdown queryResult={queryResult} selectedRecords={[]} />
+        <ExportDropdown
+          queryResult={queryResult}
+          selectedRecords={selectedRecords}
+        />
 
-        <CopyDropdown queryResult={queryResult} selectedRecords={[]} />
+        <CopyDropdown
+          queryResult={queryResult}
+          selectedRecords={selectedRecords}
+        />
       </div>
       {selectedRecords.length > 0 && (
         <div className="flex items-center gap-1.5">
@@ -261,11 +275,10 @@ export function ExportDropdown({
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuItem onClick={() => handleExport("csv", "all")}>
-              {" "}
               <FaFileCsv />
               CSV
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExport("excel", "all")}>
               <FaFileExcel />
               Excel
             </DropdownMenuItem>
@@ -281,8 +294,11 @@ export function ExportDropdown({
             </DropdownMenuItem>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            <DropdownMenuItem>CSV</DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExport("csv", "selected")}>
+              <FaFileCsv />
+              CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExport("excel", "selected")}>
               <FaFileExcel />
               Excel
             </DropdownMenuItem>
@@ -439,7 +455,6 @@ export function CopyDropdown({
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuItem onClick={() => handleCopy("csv", "all")}>
-              {" "}
               <FaFileCsv />
               CSV
             </DropdownMenuItem>
@@ -460,6 +475,7 @@ export function CopyDropdown({
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuItem onClick={() => handleCopy("csv", "selected")}>
+              <FaFileCsv />
               CSV
             </DropdownMenuItem>
             <DropdownMenuItem
