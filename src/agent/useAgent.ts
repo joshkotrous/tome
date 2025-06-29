@@ -234,11 +234,9 @@ export function useAgent({
             .replace("{{FULL_SCHEMA}}", JSON.stringify(schema))
         : AGENT_MODE_PROMPT.replace("{{DATABASES}}", JSON.stringify(databases));
 
+    // Remove apiKey from streamResponse to avoid exposing it in client bundle
     const streamResult = streamResponse({
-      apiKey:
-        model.provider === "Open AI"
-          ? settings.aiFeatures.providers.openai.apiKey
-          : settings.aiFeatures.providers.anthropic.apiKey,
+      apiKey: undefined, // Do not pass API key to client-side streaming
       model: model.name,
       toolCallStreaming: true,
       provider: model.provider,
