@@ -18,7 +18,19 @@ import {
 import { Connection as ConnectionType } from "../../src/types";
 import { ipcMain } from "electron";
 
-ipcMain.handle("connections:listConnections", async () => {
+// Helper function to check if the sender is authorized
+function isSenderAuthorized(event: Electron.IpcMainInvokeEvent): boolean {
+  // Example check: allow only if sender's URL is from the app's own origin
+  // Adjust the trustedOrigin to your app's actual origin or file protocol
+  const trustedOrigin = 'file://';
+  const senderUrl = event.senderFrame.url;
+  return senderUrl.startsWith(trustedOrigin);
+}
+
+ipcMain.handle("connections:listConnections", async (event) => {
+  if (!isSenderAuthorized(event)) {
+    throw new Error('Unauthorized access to listConnections');
+  }
   try {
     const databases = await listConnections();
     return databases;
@@ -28,7 +40,10 @@ ipcMain.handle("connections:listConnections", async () => {
   }
 });
 
-ipcMain.handle("connections:getConnection", async (_event, id: number) => {
+ipcMain.handle("connections:getConnection", async (event, id: number) => {
+  if (!isSenderAuthorized(event)) {
+    throw new Error('Unauthorized access to getConnection');
+  }
   try {
     const database = await getConnection(id);
     return database;
@@ -40,7 +55,10 @@ ipcMain.handle("connections:getConnection", async (_event, id: number) => {
 
 ipcMain.handle(
   "connections:deleteConnections",
-  async (_event, ids: number[]) => {
+  async (event, ids: number[]) => {
+    if (!isSenderAuthorized(event)) {
+      throw new Error('Unauthorized access to deleteConnections');
+    }
     try {
       await deleteConnections(ids);
     } catch (err) {
@@ -52,7 +70,10 @@ ipcMain.handle(
 
 ipcMain.handle(
   "connections:updateConnection",
-  async (_event, id: number, values: Partial<ConnectionType>) => {
+  async (event, id: number, values: Partial<ConnectionType>) => {
+    if (!isSenderAuthorized(event)) {
+      throw new Error('Unauthorized access to updateConnection');
+    }
     try {
       const database = await updateConnection(id, values);
       return database;
@@ -65,7 +86,10 @@ ipcMain.handle(
 
 ipcMain.handle(
   "connections:createConnection",
-  async (_event, values: Omit<ConnectionType, "id">) => {
+  async (event, values: Omit<ConnectionType, "id">) => {
+    if (!isSenderAuthorized(event)) {
+      throw new Error('Unauthorized access to createConnection');
+    }
     try {
       const database = await createConnection(values);
       return database;
@@ -78,7 +102,10 @@ ipcMain.handle(
 
 ipcMain.handle(
   "connections:testConnection",
-  async (_event, db: Omit<ConnectionType, "id">) => {
+  async (event, db: Omit<ConnectionType, "id">) => {
+    if (!isSenderAuthorized(event)) {
+      throw new Error('Unauthorized access to testConnection');
+    }
     try {
       const success = await testConnection(db);
       return success;
@@ -89,7 +116,10 @@ ipcMain.handle(
   }
 );
 
-ipcMain.handle("connections:connect", async (_event, db: ConnectionType) => {
+ipcMain.handle("connections:connect", async (event, db: ConnectionType) => {
+  if (!isSenderAuthorized(event)) {
+    throw new Error('Unauthorized access to connect');
+  }
   try {
     await connect(db);
   } catch (err) {
@@ -98,7 +128,10 @@ ipcMain.handle("connections:connect", async (_event, db: ConnectionType) => {
   }
 });
 
-ipcMain.handle("connections:disconnect", async (_event, db: ConnectionType) => {
+ipcMain.handle("connections:disconnect", async (event, db: ConnectionType) => {
+  if (!isSenderAuthorized(event)) {
+    throw new Error('Unauthorized access to disconnect');
+  }
   try {
     await disconnect(db);
   } catch (err) {
@@ -107,7 +140,10 @@ ipcMain.handle("connections:disconnect", async (_event, db: ConnectionType) => {
   }
 });
 
-ipcMain.handle("connections:listActiveConnections", async () => {
+ipcMain.handle("connections:listActiveConnections", async (event) => {
+  if (!isSenderAuthorized(event)) {
+    throw new Error('Unauthorized access to listActiveConnections');
+  }
   try {
     const active = listActive();
     return active;
@@ -119,7 +155,10 @@ ipcMain.handle("connections:listActiveConnections", async () => {
 
 ipcMain.handle(
   "connections:listRemoteDatabases",
-  async (_event, db: ConnectionType) => {
+  async (event, db: ConnectionType) => {
+    if (!isSenderAuthorized(event)) {
+      throw new Error('Unauthorized access to listRemoteDatabases');
+    }
     try {
       const remotes = await listRemoteDatabases(db);
       return remotes;
@@ -132,7 +171,10 @@ ipcMain.handle(
 
 ipcMain.handle(
   "connections:listSchemas",
-  async (_event, db: ConnectionType, targetDb?: string) => {
+  async (event, db: ConnectionType, targetDb?: string) => {
+    if (!isSenderAuthorized(event)) {
+      throw new Error('Unauthorized access to listSchemas');
+    }
     try {
       const schemas = await listSchemas(db, targetDb);
       return schemas;
@@ -142,14 +184,18 @@ ipcMain.handle(
     }
   }
 );
+
 ipcMain.handle(
   "connections:listSchemaTables",
   async (
-    _event,
+    event,
     db: ConnectionType,
     targetSchema: string,
     targetDb?: string
   ) => {
+    if (!isSenderAuthorized(event)) {
+      throw new Error('Unauthorized access to listSchemaTables');
+    }
     try {
       const tables = await listSchemaTables(db, targetSchema, targetDb);
       return tables;
@@ -162,7 +208,10 @@ ipcMain.handle(
 
 ipcMain.handle(
   "connections:query",
-  async (_event, db: ConnectionType, sql: string, params?: any[]) => {
+  async (event, db: ConnectionType, sql: string, params?: any[]) => {
+    if (!isSenderAuthorized(event)) {
+      throw new Error('Unauthorized access to query');
+    }
     try {
       const result = await query(db, sql, params);
       return result;
@@ -175,7 +224,10 @@ ipcMain.handle(
 
 ipcMain.handle(
   "connections:getFullSchema",
-  async (_event, db: ConnectionType, targetDb?: string) => {
+  async (event, db: ConnectionType, targetDb?: string) => {
+    if (!isSenderAuthorized(event)) {
+      throw new Error('Unauthorized access to getFullSchema');
+    }
     try {
       const schema = await getFullSchema(db, targetDb);
       return schema;
@@ -188,7 +240,10 @@ ipcMain.handle(
 
 ipcMain.handle(
   "connections:getConnectionSchema",
-  async (_event, connection: number) => {
+  async (event, connection: number) => {
+    if (!isSenderAuthorized(event)) {
+      throw new Error('Unauthorized access to getConnectionSchema');
+    }
     try {
       const schema = await getConnectionSchema(connection);
       return schema;
@@ -198,3 +253,4 @@ ipcMain.handle(
     }
   }
 );
+
