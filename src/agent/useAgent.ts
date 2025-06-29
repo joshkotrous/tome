@@ -235,10 +235,10 @@ export function useAgent({
         : AGENT_MODE_PROMPT.replace("{{DATABASES}}", JSON.stringify(databases));
 
     const streamResult = streamResponse({
-      apiKey:
-        model.provider === "Open AI"
-          ? settings.aiFeatures.providers.openai.apiKey
-          : settings.aiFeatures.providers.anthropic.apiKey,
+      // Remove apiKey to avoid exposing it to client
+      // apiKey: model.provider === "Open AI"
+      //   ? settings.aiFeatures.providers.openai.apiKey
+      //   : settings.aiFeatures.providers.anthropic.apiKey,
       model: model.name,
       toolCallStreaming: true,
       provider: model.provider,
