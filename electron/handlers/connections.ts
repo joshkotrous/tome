@@ -1,3 +1,4 @@
+import path from "node:path";
 import {
   connect,
   createConnection,
@@ -16,7 +17,7 @@ import {
   updateConnection,
 } from "../../core/connections";
 import { Connection as ConnectionType } from "../../src/types";
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 
 ipcMain.handle("connections:listConnections", async () => {
   try {
@@ -198,3 +199,16 @@ ipcMain.handle(
     }
   }
 );
+
+ipcMain.handle("connections:getSampleDatabasePath", async () => {
+  try {
+    // Get the app path and construct the sample database path
+    const appPath = app.getAppPath();
+    const sampleDbPath = path.join(appPath, "db", "samples", "sample.db");
+
+    return sampleDbPath;
+  } catch (error) {
+    console.error("Failed to get sample database path:", error);
+    throw error;
+  }
+});
