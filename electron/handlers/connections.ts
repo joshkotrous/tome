@@ -1,3 +1,4 @@
+import path from "node:path";
 import {
   connect,
   createConnection,
@@ -16,7 +17,8 @@ import {
   updateConnection,
 } from "../../core/connections";
 import { Connection as ConnectionType } from "../../src/types";
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
+import fs from "node:fs/promises";
 
 ipcMain.handle("connections:listConnections", async () => {
   try {
@@ -198,3 +200,38 @@ ipcMain.handle(
     }
   }
 );
+
+ipcMain.handle("connections:getSampleDatabasePath", async () => {
+  try {
+    // Define the path where the sample database should be stored in userData
+    const userDataPath = app.getPath("userData");
+    const sampleDbPath = path.join(userDataPath, "sample.db");
+
+    // Check if the sample database already exists in userData
+    try {
+      await fs.access(sampleDbPath);
+      return sampleDbPath;
+    } catch {
+      // Sample database doesn't exist in userData, need to copy it
+
+      // Determine the source path based on whether the app is packaged or not
+      const sourcePath = app.isPackaged
+        ? path.join(process.resourcesPath, "db", "samples", "sample.db")
+        : path.join(__dirname, "../../db/samples/sample.db");
+
+      // Ensure the userData directory exists
+      await fs.mkdir(userDataPath, { recursive: true });
+
+      // Copy the sample database to userData
+      await fs.copyFile(sourcePath, sampleDbPath);
+
+      console.log(
+        `Sample database copied from ${sourcePath} to ${sampleDbPath}`
+      );
+      return sampleDbPath;
+    }
+  } catch (error) {
+    console.error("Failed to get sample database path:", error);
+    throw error;
+  }
+});
