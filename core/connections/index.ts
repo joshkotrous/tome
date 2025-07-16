@@ -12,6 +12,8 @@ import { ConnectionConfig as PGConnection } from "pg";
 import * as mysql from "mysql";
 import { listDatabases } from "../databases";
 import { indexConnection } from "../semanticIndex";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
 
 export async function listConnections(): Promise<Connection[]> {
   const dbs = await db.select().from(schema.connections);
@@ -82,7 +84,8 @@ async function testPostgresConnection(
     port: connection.port ?? 5432,
     database: connection.database,
     user: connection.user,
-    password: typeof connection.password === 'string' ? connection.password : undefined,
+    password:
+      typeof connection.password === "string" ? connection.password : undefined,
     ssl: connection.ssl ? { rejectUnauthorized: false } : false,
     connectionTimeoutMillis: 5_000,
   });
@@ -107,7 +110,8 @@ async function testMySQLConnection(
     port: connection.port ?? 3306,
     database: connection.database,
     user: connection.user,
-    password: typeof connection.password === 'string' ? connection.password : undefined,
+    password:
+      typeof connection.password === "string" ? connection.password : undefined,
     timeout: 5000,
   });
 
@@ -118,14 +122,14 @@ async function testMySQLConnection(
         else resolve();
       });
     });
-    
+
     await new Promise<void>((resolve, reject) => {
       conn.query("SELECT 1", (err) => {
         if (err) reject(err);
         else resolve();
       });
     });
-    
+
     return { success: true, error: "" };
   } catch (err) {
     console.error("MySQL connection test failed:", err);
@@ -141,11 +145,11 @@ async function testSQLiteConnection(
   try {
     const Database = require("better-sqlite3");
     const db = new Database(connection.database);
-    
+
     // Test the connection with a simple query
     db.prepare("SELECT 1").get();
     db.close();
-    
+
     return { success: true, error: "" };
   } catch (err) {
     console.error("SQLite connection test failed:", err);
@@ -501,10 +505,12 @@ export async function listSchemaTables(
     }
 
     const driver = (await connect(db)).driver as any;
-    const tables: { name: string }[] = driver.prepare(
-      `SELECT name FROM sqlite_master
+    const tables: { name: string }[] = driver
+      .prepare(
+        `SELECT name FROM sqlite_master
         WHERE type = 'table' AND name NOT LIKE 'sqlite_%';`
-    ).all();
+      )
+      .all();
 
     const result: TableDef[] = [];
     for (const { name } of tables) {

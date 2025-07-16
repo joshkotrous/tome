@@ -97,7 +97,7 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
   useEffect(() => {
     setDatabase((prev) => {
       let newConnection: any = {};
-      
+
       switch (prev.engine) {
         case "Postgres":
           newConnection = {
@@ -131,7 +131,7 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
           };
           break;
       }
-      
+
       return {
         ...prev,
         connection: newConnection,
@@ -188,6 +188,37 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
     refreshDatabases();
   }
 
+  async function handleUseSampleDatabase() {
+    try {
+      setLoading(true);
+      const sampleDbPath = await window.connections.getSampleDatabasePath();
+
+      const sampleDatabase: Omit<Connection, "id"> = {
+        name: "Chinook Sample Database",
+        description:
+          "Sample SQLite database with music store data including artists, albums, tracks, customers, and sales records.",
+        engine: "SQLite",
+        connection: {
+          database: sampleDbPath,
+          host: "",
+          user: "",
+          password: "",
+          port: 0,
+          ssl: false,
+        },
+        createdAt: new Date(),
+        settings: {
+          autoUpdateSemanticIndex: false,
+        },
+      };
+
+      await saveDatabase(sampleDatabase);
+    } catch (error) {
+      console.error("Failed to set up sample database:", error);
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (!open) {
       setStep("engine");
@@ -216,37 +247,60 @@ export function AddConnectionForm({ onComplete }: { onComplete?: () => void }) {
       {displayStep(step)}
       <div className="flex justify-between">
         {step === "connection" && <TestConnectionButton database={database} />}
-        <div className="w-full flex justify-end gap-2">
-          <Button
-            disabled={step === "engine"}
-            onClick={() => handlePreviousStep(step)}
-          >
-            Back
-          </Button>
-          {step !== "connection" && (
-            <Button onClick={() => handleNextStep(step)} variant="secondary">
-              Continue
-            </Button>
-          )}
-          {step === "connection" && (
+        <div className="w-full flex justify-between">
+          <div className="flex gap-2">
+            {step === "engine" && (
+              <Button
+                onClick={handleUseSampleDatabase}
+                disabled={loading}
+                className="flex items-center gap-2"
+                variant="outline"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Setting up sample database...
+                  </>
+                ) : (
+                  <>
+                    <DatabaseIcon className="size-4" />
+                    Use Sample Database
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
             <Button
-              disabled={
-                !database.engine ||
-                !database.connection.database ||
-                (database.engine !== "SQLite" && (
-                  !database.connection.password ||
-                  !database.connection.port ||
-                  !database.connection.user ||
-                  !database.connection.host
-                ))
-              }
-              onClick={() => saveDatabase(database)}
-              variant="secondary"
+              disabled={step === "engine"}
+              onClick={() => handlePreviousStep(step)}
             >
-              Save Connection
-              {loading && <Loader2 className="size-4 animate-spin" />}
+              Back
             </Button>
-          )}
+            {step !== "connection" && (
+              <Button onClick={() => handleNextStep(step)} variant="secondary">
+                Continue
+              </Button>
+            )}
+            {step === "connection" && (
+              <Button
+                disabled={
+                  !database.engine ||
+                  !database.connection.database ||
+                  (database.engine !== "SQLite" &&
+                    (!database.connection.password ||
+                      !database.connection.port ||
+                      !database.connection.user ||
+                      !database.connection.host))
+                }
+                onClick={() => saveDatabase(database)}
+                variant="secondary"
+              >
+                Save Connection
+                {loading && <Loader2 className="size-4 animate-spin" />}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -297,12 +351,11 @@ export function TestConnectionButton({
           disabled={
             !database.engine ||
             !database.connection.database ||
-            (database.engine !== "SQLite" && (
-              !database.connection.password ||
-              !database.connection.port ||
-              !database.connection.user ||
-              !database.connection.host
-            ))
+            (database.engine !== "SQLite" &&
+              (!database.connection.password ||
+                !database.connection.port ||
+                !database.connection.user ||
+                !database.connection.host))
           }
           onClick={() => testConnection(database)}
           variant="secondary"
@@ -368,7 +421,7 @@ function SelectDatabaseEngine({
   setEngine: (v: DatabaseEngine) => void;
 }) {
   return (
-    <div className="space-y-3 w-fit mx-auto">
+    <div className="space-y-4 w-fit mx-auto">
       <div className="space-y-1">
         <h2 className="font-semibold">Select Database Type</h2>
         <h3 className="text-muted-foreground text-sm">
@@ -378,20 +431,20 @@ function SelectDatabaseEngine({
 
       <div className="w-full grid grid-cols-3 text-center gap-4 items-center justify-center">
         {DatabaseEngineObject.options.map((i) => (
-            <Button
-              key={i}
-              onClick={() => setEngine(i)}
-              className={cn(
-                `size-48 border rounded-md flex flex-col text-lg`,
-                i === engine && "bg-accent"
-              )}
-            >
-              <div className="size-20 flex items-center justify-center">
-                {getEngineLogo(i)}
-              </div>
-              {i}
-            </Button>
-          ))}
+          <Button
+            key={i}
+            onClick={() => setEngine(i)}
+            className={cn(
+              `size-48 border rounded-md flex flex-col text-lg`,
+              i === engine && "bg-accent"
+            )}
+          >
+            <div className="size-20 flex items-center justify-center">
+              {getEngineLogo(i)}
+            </div>
+            {i}
+          </Button>
+        ))}
       </div>
     </div>
   );
@@ -739,9 +792,9 @@ export function SQLiteConnectionForm({
   };
 
   const handleFileSelect = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.db,.sqlite,.sqlite3';
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".db,.sqlite,.sqlite3";
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
@@ -791,14 +844,17 @@ export function SQLiteConnectionForm({
               value={values.connection.database}
               id="database"
               placeholder="e.g. /path/to/database.db"
-              onChange={(e) => handleConnectionChange("database", e.target.value)}
+              onChange={(e) =>
+                handleConnectionChange("database", e.target.value)
+              }
             />
             <Button type="button" variant="outline" onClick={handleFileSelect}>
               Browse
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Select an existing SQLite database file or enter a path to create a new one
+            Select an existing SQLite database file or enter a path to create a
+            new one
           </p>
         </div>
       </div>

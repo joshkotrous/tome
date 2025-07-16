@@ -44,6 +44,7 @@ interface ConnectionsApi {
   ) => Promise<JsonQueryResult>;
   getFullSchema: (db: Connection, targetDb?: string) => Promise<DatabaseSchema>;
   getConnectionSchema: (connection: number) => Promise<ConnectionSchema>;
+  getSampleDatabasePath: () => Promise<string>;
 }
 
 interface SettingsApi {
