@@ -18,6 +18,10 @@
       {
         "from": "db/migrations",
         "to": "db/migrations"
+      },
+      {
+        "from": "db/samples",
+        "to": "db/samples"
       }
     ],
     "appId": "com.joshkotrous.tome",
