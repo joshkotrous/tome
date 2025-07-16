@@ -65,6 +65,10 @@ export async function testConnection(
   switch (db.engine) {
     case "Postgres":
       return await testPostgresConnection(db.connection);
+    case "MySQL":
+      return await testMySQLConnection(db.connection);
+    case "SQLite":
+      return await testSQLiteConnection(db.connection);
     default:
       throw new Error("Unsupported engine");
   }
@@ -78,7 +82,7 @@ async function testPostgresConnection(
     port: connection.port ?? 5432,
     database: connection.database,
     user: connection.user,
-    password: connection.password,
+    password: typeof connection.password === 'string' ? connection.password : undefined,
     ssl: connection.ssl ? { rejectUnauthorized: false } : false,
     connectionTimeoutMillis: 5_000,
   });
@@ -95,7 +99,61 @@ async function testPostgresConnection(
   }
 }
 
-type Driver = PgPool | mysql.Connection;
+async function testMySQLConnection(
+  connection: ConnectionConfig
+): Promise<{ success: boolean; error: string }> {
+  const conn = mysql.createConnection({
+    host: connection.host,
+    port: connection.port ?? 3306,
+    database: connection.database,
+    user: connection.user,
+    password: typeof connection.password === 'string' ? connection.password : undefined,
+    timeout: 5000,
+  });
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      conn.connect((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    
+    await new Promise<void>((resolve, reject) => {
+      conn.query("SELECT 1", (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    
+    return { success: true, error: "" };
+  } catch (err) {
+    console.error("MySQL connection test failed:", err);
+    return { success: false, error: String(err) };
+  } finally {
+    conn.end();
+  }
+}
+
+async function testSQLiteConnection(
+  connection: ConnectionConfig
+): Promise<{ success: boolean; error: string }> {
+  try {
+    const Database = require("better-sqlite3");
+    const db = new Database(connection.database);
+    
+    // Test the connection with a simple query
+    db.prepare("SELECT 1").get();
+    db.close();
+    
+    return { success: true, error: "" };
+  } catch (err) {
+    console.error("SQLite connection test failed:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
+type Driver = PgPool | mysql.Connection | any; // any for better-sqlite3 Database
 
 export type ConnectionEntry = { db: Connection; driver: Driver };
 
@@ -124,6 +182,13 @@ export async function connect(db: Connection): Promise<ConnectionEntry> {
       break;
     }
 
+    case "SQLite": {
+      const Database = require("better-sqlite3");
+      const sqliteDb = new Database(db.connection.database);
+      entry = { db, driver: sqliteDb };
+      break;
+    }
+
     default:
       throw new Error(`Unsupported engine ${db.engine as string}`);
   }
@@ -140,7 +205,7 @@ export async function disconnect(db: Connection): Promise<void> {
 
   if (driver instanceof PgPool) await driver.end();
   else if ("end" in driver) await (driver as mysql.Connection).end();
-  /* else sqlite.close() … */
+  else if ("close" in driver) (driver as any).close();
 
   connections.delete(db.id);
 }
@@ -310,16 +375,16 @@ export async function listSchemas(
   }
 
   /* -------------------------  MYSQL  -------------------------- */
-  // if (db.engine === "MySQL") {
-  //   // MySQL's "schema" == "database" → one per connection
-  //   return [targetDb ?? db.connection.database];
-  // }
+  if (db.engine === "MySQL") {
+    // MySQL's "schema" == "database" → one per connection
+    return [targetDb ?? db.connection.database ?? ""];
+  }
 
   /* ------------------------  SQLITE  -------------------------- */
-  // if (db.engine === "SQLite") {
-  //   // Only the default 'main' schema (optionally 'temp')
-  //   return ["main"];
-  // }
+  if (db.engine === "SQLite") {
+    // Only the default 'main' schema (optionally 'temp')
+    return ["main"];
+  }
 
   throw new Error(`Unsupported engine ${db.engine as string}`);
 }
@@ -375,102 +440,87 @@ export async function listSchemaTables(
     }
   }
 
-  // if (db.engine === "MySQL") {
-  //   // In MySQL a "schema" *is* a database; validate the request.
-  //   const schemaName = targetDb ?? db.connection.database;
-  //   if (targetSchema && targetSchema !== schemaName) {
-  //     throw new Error(
-  //       `MySQL: targetSchema should match the database name (` +
-  //         `'${schemaName}'), got '${targetSchema}'.`
-  //     );
-  //   }
+  if (db.engine === "MySQL") {
+    // In MySQL a "schema" *is* a database; validate the request.
+    const schemaName = targetDb ?? db.connection.database;
+    if (targetSchema && targetSchema !== schemaName) {
+      throw new Error(
+        `MySQL: targetSchema should match the database name (` +
+          `'${schemaName}'), got '${targetSchema}'.`
+      );
+    }
 
-  //   const rows = await new Promise<
-  //     {
-  //       TABLE_NAME: string;
-  //       COLUMN_NAME: string;
-  //       DATA_TYPE: string;
-  //       IS_NULLABLE: "YES" | "NO";
-  //       COLUMN_DEFAULT: string | null;
-  //     }[]
-  //   >((resolve, reject) =>
-  //     (
-  //       await connect(db)
-  //     ).driver.query(
-  //       `
-  //       SELECT TABLE_NAME,
-  //              COLUMN_NAME,
-  //              DATA_TYPE,
-  //              IS_NULLABLE,
-  //              COLUMN_DEFAULT
-  //         FROM information_schema.columns
-  //        WHERE table_schema = ?
-  //        ORDER BY TABLE_NAME, ORDINAL_POSITION;
-  //       `,
-  //       [schemaName],
-  //       (err: any, rows: any[]) => (err ? reject(err) : resolve(rows as any))
-  //     )
-  //   );
+    const entry = await connect(db);
+    const rows = await new Promise<
+      {
+        TABLE_NAME: string;
+        COLUMN_NAME: string;
+        DATA_TYPE: string;
+        IS_NULLABLE: "YES" | "NO";
+        COLUMN_DEFAULT: string | null;
+      }[]
+    >((resolve, reject) =>
+      (entry.driver as mysql.Connection).query(
+        `
+        SELECT TABLE_NAME,
+               COLUMN_NAME,
+               DATA_TYPE,
+               IS_NULLABLE,
+               COLUMN_DEFAULT
+          FROM information_schema.columns
+         WHERE table_schema = ?
+         ORDER BY TABLE_NAME, ORDINAL_POSITION;
+        `,
+        [schemaName],
+        (err: any, rows: any[]) => (err ? reject(err) : resolve(rows as any))
+      )
+    );
 
-  //   const map = new Map<string, TableDef>();
-  //   for (const r of rows) {
-  //     if (!map.has(r.TABLE_NAME))
-  //       map.set(r.TABLE_NAME, { table: r.TABLE_NAME, columns: [] });
-  //     map.get(r.TABLE_NAME)!.columns.push({
-  //       name: r.COLUMN_NAME,
-  //       type: r.DATA_TYPE,
-  //       nullable: r.IS_NULLABLE === "YES",
-  //       default: r.COLUMN_DEFAULT,
-  //     });
-  //   }
-  //   return [...map.values()];
-  // }
+    const map = new Map<string, TableDef>();
+    for (const r of rows) {
+      if (!map.has(r.TABLE_NAME))
+        map.set(r.TABLE_NAME, { table: r.TABLE_NAME, columns: [] });
+      map.get(r.TABLE_NAME)!.columns.push({
+        name: r.COLUMN_NAME,
+        type: r.DATA_TYPE,
+        nullable: r.IS_NULLABLE === "YES",
+        default: r.COLUMN_DEFAULT,
+      });
+    }
+    return [...map.values()];
+  }
 
-  // if (db.engine === "SQLite") {
-  //   if (targetDb && targetDb !== db.connection.database) {
-  //     throw new Error(
-  //       "SQLite connection is tied to the file on disk — open a new file to inspect it."
-  //     );
-  //   }
-  //   if (targetSchema && targetSchema !== "main") {
-  //     throw new Error("SQLite only exposes the default 'main' schema.");
-  //   }
+  if (db.engine === "SQLite") {
+    if (targetDb && targetDb !== db.connection.database) {
+      throw new Error(
+        "SQLite connection is tied to the file on disk — open a new file to inspect it."
+      );
+    }
+    if (targetSchema && targetSchema !== "main") {
+      throw new Error("SQLite only exposes the default 'main' schema.");
+    }
 
-  //   const driver = (await connect(db)).driver as any;
-  //   const tables: { name: string }[] = await new Promise((resolve, reject) =>
-  //     driver.all(
-  //       `SELECT name FROM sqlite_master
-  //         WHERE type = 'table' AND name NOT LIKE 'sqlite_%';`,
-  //       (err: any, rows: any[]) => (err ? reject(err) : resolve(rows))
-  //     )
-  //   );
+    const driver = (await connect(db)).driver as any;
+    const tables: { name: string }[] = driver.prepare(
+      `SELECT name FROM sqlite_master
+        WHERE type = 'table' AND name NOT LIKE 'sqlite_%';`
+    ).all();
 
-  //   const result: TableDef[] = [];
-  //   for (const { name } of tables) {
-  //     const cols = await new Promise<
-  //       {
-  //         name: string;
-  //         type: string;
-  //         notnull: 0 | 1;
-  //         dflt_value: string | null;
-  //       }[]
-  //     >((resolve, reject) =>
-  //       driver.all(`PRAGMA table_info(${name});`, (err: any, rows: any[]) =>
-  //         err ? reject(err) : resolve(rows)
-  //       )
-  //     );
-  //     result.push({
-  //       table: name,
-  //       columns: cols.map((c) => ({
-  //         name: c.name,
-  //         type: c.type,
-  //         nullable: c.notnull === 0,
-  //         default: c.dflt_value,
-  //       })),
-  //     });
-  //   }
-  //   return result;
-  // }
+    const result: TableDef[] = [];
+    for (const { name } of tables) {
+      const cols = driver.prepare(`PRAGMA table_info(${name});`).all();
+      result.push({
+        table: name,
+        columns: cols.map((c: any) => ({
+          name: c.name,
+          type: c.type,
+          nullable: c.notnull === 0,
+          default: c.dflt_value,
+        })),
+      });
+    }
+    return result;
+  }
 
   throw new Error(`Unsupported engine ${db.engine as string}`);
 }

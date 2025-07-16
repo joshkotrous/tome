@@ -7,7 +7,16 @@ export const DatabaseEngineObject = z.enum(["Postgres", "MySQL", "SQLite"]);
 
 export type DatabaseEngine = z.infer<typeof DatabaseEngineObject>;
 
-export type ConnectionConfig = PGConnection | MYSQLConnection;
+export type SQLiteConnection = {
+  database: string;
+  host?: string;
+  port?: number;
+  user?: string;
+  password?: string;
+  ssl?: boolean;
+};
+
+export type ConnectionConfig = PGConnection | MYSQLConnection | SQLiteConnection;
 
 export type ConnectionSettings = {
   autoUpdateSemanticIndex: boolean;
