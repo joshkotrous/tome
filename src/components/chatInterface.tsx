@@ -892,7 +892,8 @@ function toolDisplay(
     return;
   }
 
-  const { state, toolName, args, result } = part.toolInvocation;
+  const { state, toolName, args } = part.toolInvocation;
+  const result = "result" in part.toolInvocation ? part.toolInvocation.result : undefined;
 
   if (toolName === "getSchema") {
     if (state === "partial-call") {

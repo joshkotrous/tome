@@ -3,6 +3,13 @@ import { db } from "../../db";
 import * as schema from "../../db/schema";
 import { asc, eq } from "drizzle-orm";
 
+function transformMessage(message: typeof schema.messages.$inferSelect): TomeMessage {
+  return {
+    ...message,
+    metadata: message.metadata ?? undefined,
+  };
+}
+
 export async function createMessage(
   values: Omit<TomeMessage, "id" | "createdAt">
 ): Promise<TomeMessage> {
@@ -13,7 +20,7 @@ export async function createMessage(
   if (!message) {
     throw new Error("Could not create message");
   }
-  return message;
+  return transformMessage(message);
 }
 
 export async function listMessages(
@@ -26,7 +33,7 @@ export async function listMessages(
       .from(schema.messages)
       .where(eq(schema.messages.conversation, conversation))
       .orderBy(asc(schema.messages.createdAt));
-    return messages;
+    return messages.map(transformMessage);
   }
 
   if (query) {
@@ -35,7 +42,7 @@ export async function listMessages(
       .from(schema.messages)
       .where(eq(schema.messages.query, query))
       .orderBy(asc(schema.messages.createdAt));
-    return messages;
+    return messages.map(transformMessage);
   }
 
   throw new Error("One of conversation or message must be provided");
@@ -50,5 +57,5 @@ export async function updateMessage(
     .set(values)
     .where(eq(schema.messages.id, id))
     .returning();
-  return updated;
+  return transformMessage(updated);
 }

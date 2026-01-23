@@ -9,7 +9,6 @@ import {
   Loader2,
   Pencil,
   Plug,
-  RefreshCcw,
   SidebarClose,
   Sparkles,
   Table,
