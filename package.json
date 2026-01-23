@@ -1,7 +1,7 @@
 {
   "name": "tome",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.0.0",
   "author": "Josh Kotrous",
   "homepage": "https://tomedb.dev",
   "type": "module",
@@ -100,8 +100,7 @@
     "dist:mac:arm": "electron-builder --mac --arm64 --publish=never",
     "dist:mac:x64": "electron-builder --mac --x64 --publish=never",
     "prebuild": "npm-run-all clean build:renderer build:main",
-    "preview": "vite preview",
-    "tsc": "tsc --noEmit"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",
