@@ -31,6 +31,21 @@ export const conversations = sqliteTable("conversations", {
   createdAt: integer({ mode: "timestamp" }).default(new Date()).notNull(),
 });
 
+export type MessageMetadata = {
+  queryResults?: {
+    query: string;
+    records: Record<string, any>[];
+    totalCount: number;
+    columns?: string[];
+  };
+  visualization?: {
+    chartType: string;
+    xAxis: string;
+    yAxis: string | string[];
+    title?: string;
+  };
+};
+
 export const messages = sqliteTable("messages", {
   id: text("id")
     .primaryKey()
@@ -48,6 +63,9 @@ export const messages = sqliteTable("messages", {
     .default([]),
   createdAt: integer({ mode: "timestamp" }).notNull(),
   query: integer().references(() => queries.id, { onDelete: "cascade" }),
+  metadata: text("metadata", { mode: "json" })
+    .$type<MessageMetadata>()
+    .default({}),
 });
 
 export const queries = sqliteTable("queries", {

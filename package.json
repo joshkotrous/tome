@@ -1,7 +1,7 @@
 {
   "name": "tome",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "author": "Josh Kotrous",
   "homepage": "https://tomedb.dev",
   "type": "module",
@@ -134,6 +134,7 @@
     "react-resizable-panels": "^3.0.3",
     "react-syntax-highlighter": "^15.6.1",
     "react-window": "^1.8.11",
+    "recharts": "^3.7.0",
     "remark-gfm": "^4.0.1",
     "sonner": "^2.0.5",
     "tailwind-merge": "^3.3.1",

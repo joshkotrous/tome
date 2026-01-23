@@ -3,15 +3,67 @@ import {
   Connection,
   ConnectionSchema,
   Conversation,
+  MessageMetadata,
   Query,
   TomeMessage,
 } from "@/types";
 import { streamResponse, TomeAgentModel } from "../../core/ai";
-import React, { SetStateAction, useState, useEffect } from "react";
+import React, { SetStateAction, useState, useEffect, useRef } from "react";
 import { getAgentTools } from "./tools";
 import { AGENT_MODE_PROMPT, EDITOR_AGENT_PROMPT } from "./prompts";
 import { nanoid } from "nanoid";
 import { useQueryData } from "@/queryDataProvider";
+
+// Helper to extract metadata from tool results
+function extractMetadataFromToolResult(
+  toolName: string,
+  args: any,
+  result: any
+): MessageMetadata | undefined {
+  if (toolName === "runQuery" || toolName === "visualizeData") {
+    try {
+      const parsed = typeof result === "string" ? JSON.parse(result) : result;
+      
+      if (parsed.error) {
+        return undefined;
+      }
+
+      // For visualizeData, extract from visualization object
+      if (toolName === "visualizeData" && parsed.visualization) {
+        return {
+          queryResults: {
+            query: args?.query || parsed.visualization.query,
+            records: (parsed.visualization.data || []).slice(0, 5),
+            totalCount: parsed.visualization.totalRows || 0,
+            columns: parsed.visualization.data?.[0] ? Object.keys(parsed.visualization.data[0]) : [],
+          },
+          visualization: {
+            chartType: parsed.visualization.config?.chartType,
+            xAxis: parsed.visualization.config?.xAxis,
+            yAxis: parsed.visualization.config?.yAxis,
+            title: parsed.visualization.config?.title,
+          },
+        };
+      }
+
+      // For runQuery
+      if (toolName === "runQuery") {
+        const records = parsed.records ?? parsed.rows ?? [];
+        return {
+          queryResults: {
+            query: args?.query || "",
+            records: records.slice(0, 5),
+            totalCount: parsed.totalCount ?? parsed.rowCount ?? records.length,
+            columns: records.length > 0 ? Object.keys(records[0]) : [],
+          },
+        };
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+  return undefined;
+}
 
 export function updateMessagesWithToolResult(
   messages: TomeMessage[],
@@ -118,6 +170,9 @@ export function useAgent({
   const [messages, setMessages] = useState<TomeMessage[]>(initialMessages);
   const [thinking, setThinking] = useState(false);
   const [permissionNeeded, setPermissionNeeded] = useState(false);
+  
+  // Map to track toolCallId -> database message ID for updating
+  const toolCallToDbIdRef = useRef<Map<string, string>>(new Map());
 
   // Update messages when initialMessages changes (e.g., when switching queries)
   useEffect(() => {
@@ -165,13 +220,27 @@ export function useAgent({
   async function executeQuery(
     connectionName: string,
     connectionId: number,
-    query: string
+    query: string,
+    maxRows: number = 5
   ) {
     const conn = await getConnection(connectionName, connectionId);
     const res = await runQuery(conn, query);
     return res && "error" in res
       ? res
-      : { totalCount: res?.rowCount, records: res?.rows.splice(0, 5) ?? [] };
+      : { 
+          totalCount: res?.rowCount, 
+          records: res?.rows?.slice(0, maxRows) ?? [],
+          columns: res?.columns ?? (res?.rows && res.rows.length > 0 ? Object.keys(res.rows[0]) : []),
+        };
+  }
+
+  // Separate function for visualization with higher row limit
+  async function executeQueryForVisualization(
+    connectionName: string,
+    connectionId: number,
+    query: string
+  ) {
+    return executeQuery(connectionName, connectionId, query, 100);
   }
 
   async function sendMessage(content: string, conversation?: number) {
@@ -217,11 +286,21 @@ export function useAgent({
       return;
     }
 
+    // Callback for visualization tool in editor mode - updates the editor query
+    const handleVisualization = mode === "editor" && setQuery 
+      ? (visualization: { query: string }) => {
+          // Update the editor with the visualization query so user can see/modify it
+          setQuery(visualization.query);
+        }
+      : undefined;
+
     const tools = getAgentTools({
       getSchemaFn: getFullSchema,
       query,
       setQuery,
       runQueryFn: executeQuery,
+      runQueryForVisualizationFn: executeQueryForVisualization,
+      onVisualize: handleVisualization,
     });
 
     const systemPrompt =
@@ -246,8 +325,90 @@ export function useAgent({
       maxSteps: 10,
       messages: messagesToUse,
       system: systemPrompt,
-      onStepFinish: ({ toolCalls }) => {
-        console.log("STEP FINISH: ", toolCalls);
+      onStepFinish: ({ toolCalls, toolResults }) => {
+        
+        // Update messages with tool results and metadata
+        if (toolResults && toolResults.length > 0) {
+          toolResults.forEach((toolResult: any) => {
+            const toolCall = toolCalls?.find((tc: any) => tc.toolCallId === toolResult.toolCallId);
+            if (toolCall) {
+              const metadata = extractMetadataFromToolResult(
+                toolCall.toolName,
+                toolCall.args,
+                toolResult.result
+              );
+              
+              // Update the parts to include the actual result
+              const updatedParts = [
+                {
+                  type: "tool-invocation" as const,
+                  toolInvocation: {
+                    toolName: toolCall.toolName,
+                    toolCallId: toolResult.toolCallId,
+                    state: "result" as const,
+                    result: toolResult.result,
+                    args: toolCall.args,
+                  },
+                },
+              ];
+              
+              // Function to persist to database
+              const persistToDb = (dbMessageId: string) => {
+                window.messages.updateMessage(dbMessageId, {
+                  parts: updatedParts,
+                  metadata: metadata,
+                });
+              };
+              
+              // Get the database message ID from our map
+              const dbMessageId = toolCallToDbIdRef.current.get(toolResult.toolCallId);
+              
+              if (dbMessageId) {
+                persistToDb(dbMessageId);
+              } else {
+                // If not in map yet, wait a bit and retry (race condition handling)
+                const checkAndUpdate = () => {
+                  const id = toolCallToDbIdRef.current.get(toolResult.toolCallId);
+                  if (id) {
+                    persistToDb(id);
+                  } else {
+                    // Retry after a short delay
+                    setTimeout(checkAndUpdate, 100);
+                  }
+                };
+                setTimeout(checkAndUpdate, 50);
+              }
+              
+              // Update the message in state
+              setMessages((prevMsgs) => {
+                const msgIndex = prevMsgs.findIndex((msg) =>
+                  msg.parts?.some(
+                    (part) =>
+                      part.type === "tool-invocation" &&
+                      part.toolInvocation.toolCallId === toolResult.toolCallId
+                  )
+                );
+                
+                if (msgIndex !== -1) {
+                  const msg = prevMsgs[msgIndex];
+                  
+                  const updatedMsg: TomeMessage = {
+                    ...msg,
+                    parts: updatedParts,
+                    metadata: metadata || msg.metadata,
+                  };
+                  
+                  return [
+                    ...prevMsgs.slice(0, msgIndex),
+                    updatedMsg,
+                    ...prevMsgs.slice(msgIndex + 1),
+                  ];
+                }
+                return prevMsgs;
+              });
+            }
+          });
+        }
       },
       onChunk: ({ chunk }) => {
         if (chunk.type === "text-delta") {
@@ -315,6 +476,8 @@ export function useAgent({
           if (askForPermissionTool) {
             setPermissionNeeded(true);
           }
+          
+          // Create message in database and store the mapping
           window.messages.createMessage({
             content: "",
             conversation: selectedConversation?.id ?? conversation ?? null,
@@ -332,7 +495,32 @@ export function useAgent({
               },
             ],
             role: "assistant",
+          }).then((createdMessage: TomeMessage) => {
+            // Store the mapping so we can update the correct message later
+            toolCallToDbIdRef.current.set(toolCallId, createdMessage.id);
+            
+            // Also update the state message with the database ID
+            setMessages((prevMsgs) => {
+              const toolMsgIndex = prevMsgs.findIndex((msg) =>
+                msg.parts?.find(
+                  (part) =>
+                    part.type === "tool-invocation" &&
+                    part.toolInvocation.toolCallId === toolCallId
+                )
+              );
+
+              if (toolMsgIndex !== -1) {
+                const toolMsg = prevMsgs[toolMsgIndex];
+                return [
+                  ...prevMsgs.slice(0, toolMsgIndex),
+                  { ...toolMsg, id: createdMessage.id },
+                  ...prevMsgs.slice(toolMsgIndex + 1),
+                ];
+              }
+              return prevMsgs;
+            });
           });
+          
           setMessages((prevMsgs) => {
             const toolMsgIndex = prevMsgs.findIndex((msg) =>
               msg.parts?.find(
