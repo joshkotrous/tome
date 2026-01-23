@@ -15,6 +15,13 @@
       "when": 1750651511485,
       "tag": "0001_rainy_the_fallen",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1769186987380,
+      "tag": "0002_high_vargas",
+      "breakpoints": true
     }
   ]
 }

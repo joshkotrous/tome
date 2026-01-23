@@ -53,9 +53,25 @@ export type Conversation = {
   createdAt: Date;
 };
 
+export type MessageMetadata = {
+  queryResults?: {
+    query: string;
+    records: Record<string, any>[];
+    totalCount: number;
+    columns?: string[];
+  };
+  visualization?: {
+    chartType: string;
+    xAxis: string;
+    yAxis: string | string[];
+    title?: string;
+  };
+};
+
 export type TomeMessage = UIMessage & {
   conversation: number | null;
   query: number | null;
+  metadata?: MessageMetadata;
 };
 
 export type Query = {

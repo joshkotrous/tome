@@ -1,5 +1,6 @@
 import {
   ArrowUp,
+  BarChart3,
   Check,
   ChevronRight,
   Database,
@@ -48,6 +49,7 @@ import { Text } from "./ui/text";
 import { AnimateEllipse } from "./animatedEllipse";
 import { useAgent } from "@/agent/useAgent";
 import { useConversationData } from "@/conversationDataProvider";
+import { DataVisualization, VisualizationData, VisualizationLoading } from "./dataVisualization";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -870,6 +872,13 @@ function ModelPicker({
   );
 }
 
+interface ToolDisplayResult {
+  text: React.ReactNode;
+  visualization?: VisualizationData;
+  query?: string;
+  queryResult?: { records: any[]; totalCount: number; error?: string };
+}
+
 function toolDisplay(
   part:
     | TextUIPart
@@ -878,54 +887,295 @@ function toolDisplay(
     | SourceUIPart
     | FileUIPart
     | StepStartUIPart
-) {
+): ToolDisplayResult | undefined {
   if (part.type !== "tool-invocation") {
     return;
   }
 
-  const { state, toolName } = part.toolInvocation;
+  const { state, toolName, args, result } = part.toolInvocation;
 
   if (toolName === "getSchema") {
     if (state === "partial-call") {
-      return (
-        <Text className="text-xs" variant="shine">
-          Getting schema...
-        </Text>
-      );
+      return {
+        text: (
+          <Text className="text-xs" variant="shine">
+            Getting schema...
+          </Text>
+        ),
+      };
     }
-    return "Retrieved schema";
+    return { text: "Retrieved schema" };
   }
 
   if (toolName === "updateQuery") {
     if (state === "partial-call") {
-      return (
-        <Text className="text-xs" variant="shine">
-          Updating query...
-        </Text>
-      );
+      return {
+        text: (
+          <Text className="text-xs" variant="shine">
+            Updating query...
+          </Text>
+        ),
+      };
     }
-    return "Updated query";
+    return { text: "Updated query" };
   }
 
   if (toolName === "runQuery") {
+    const queryStr = args?.query as string | undefined;
+    
     if (state === "partial-call") {
-      return (
-        <Text className="text-xs" variant="shine">
-          Running query...
-        </Text>
-      );
+      return {
+        text: (
+          <Text className="text-xs" variant="shine">
+            Running query...
+          </Text>
+        ),
+        query: queryStr,
+      };
     }
 
-    return "Ran query";
+    // Parse the result
+    let queryResult: { records: any[]; totalCount: number; error?: string } | undefined;
+    if (result) {
+      try {
+        const resultStr = typeof result === "string" ? result : JSON.stringify(result);
+        const parsed = JSON.parse(resultStr);
+        if (parsed.error) {
+          queryResult = { records: [], totalCount: 0, error: parsed.error };
+        } else {
+          queryResult = {
+            records: parsed.records ?? parsed.rows ?? [],
+            totalCount: parsed.totalCount ?? parsed.rowCount ?? 0,
+          };
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+
+    return { 
+      text: "Ran query",
+      query: queryStr,
+      queryResult,
+    };
+  }
+
+  if (toolName === "visualizeData") {
+    const queryStr = args?.query as string | undefined;
+    
+    if (state === "partial-call") {
+      return {
+        text: (
+          <Text className="text-xs" variant="shine">
+            <BarChart3 className="size-3 inline mr-1" />
+            Generating visualization...
+          </Text>
+        ),
+        query: queryStr,
+      };
+    }
+
+    // Parse the result to extract visualization data
+    if (state === "result" && result) {
+      try {
+        const resultStr = typeof result === "string" ? result : JSON.stringify(result);
+        const parsed = JSON.parse(resultStr);
+        
+        if (parsed.error) {
+          return { 
+            text: `Visualization error: ${parsed.error}`,
+            query: queryStr,
+          };
+        }
+        
+        if (parsed.visualization) {
+          return {
+            text: (
+              <span className="flex items-center gap-1.5">
+                <BarChart3 className="size-3" />
+                Data visualized
+              </span>
+            ),
+            visualization: parsed.visualization as VisualizationData,
+            query: queryStr,
+            queryResult: {
+              records: parsed.visualization.data ?? [],
+              totalCount: parsed.visualization.totalRows ?? 0,
+            },
+          };
+        }
+      } catch (e) {
+        return { text: "Visualization created", query: queryStr };
+      }
+    }
+    return { text: "Visualization created", query: queryStr };
   }
 
   if (toolName === "askForPermission") {
     if (state === "partial-call") {
-      return "Awaiting permission to continue...";
+      return { text: "Awaiting permission to continue..." };
     }
-
-    return "Permission received";
+    return { text: "Permission received" };
   }
+}
+
+function ToolResultAccordion({
+  toolName,
+  display,
+  toolInvocation,
+  messageMetadata,
+}: {
+  toolName: string;
+  display: ToolDisplayResult | undefined;
+  toolInvocation: any;
+  messageMetadata?: TomeMessage["metadata"];
+}) {
+  const [queryOpen, setQueryOpen] = useState(false);
+  const [resultsOpen, setResultsOpen] = useState(false);
+
+  const isLoading = toolInvocation.state === "partial-call";
+  const isVisualization = toolName === "visualizeData";
+  const isRunQuery = toolName === "runQuery";
+  const isAskPermission = toolName === "askForPermission";
+  
+  // Use metadata as fallback for persisted messages
+  const queryFromMetadata = messageMetadata?.queryResults?.query;
+  const resultsFromMetadata = messageMetadata?.queryResults;
+  
+  const hasQuery = display?.query || toolInvocation.args?.query || queryFromMetadata;
+  const queryResults = display?.queryResult || (resultsFromMetadata ? {
+    records: resultsFromMetadata.records,
+    totalCount: resultsFromMetadata.totalCount,
+  } : undefined);
+  const hasResults = queryResults && !queryResults.error;
+  const hasError = display?.queryResult?.error;
+
+  return (
+    <div className="my-1">
+      {/* Tool status indicator */}
+      <div className="border p-2 rounded-sm bg-zinc-900/75 w-fit min-w-64">
+        <div className="flex gap-1.5 items-center text-xs text-zinc-400">
+          {isLoading && (isAskPermission || isRunQuery || isVisualization) && (
+            <Spinner className="size-3.5" />
+          )}
+          {toolInvocation.state === "result" && !hasError && (
+            <Check className="size-3.5 text-green-500" />
+          )}
+          {hasError && (
+            <span className="text-red-500">✕</span>
+          )}
+          {display?.text}
+        </div>
+
+        {/* Query accordion - for runQuery, visualizeData, and askForPermission */}
+        {hasQuery && (
+          <div className="mt-2 space-y-1">
+            <div
+              onClick={() => setQueryOpen((prev) => !prev)}
+              className="flex items-center gap-0.5 text-xs text-zinc-500 hover:text-zinc-300 transition-all cursor-pointer select-none"
+            >
+              <ChevronRight
+                className={cn("size-3.5 transition-transform", queryOpen && "rotate-90")}
+              />
+              View Query
+            </div>
+            {queryOpen && (
+              <div className="max-w-md overflow-auto">
+                <TomeSyntaxHighlighter
+                  content={display?.query || toolInvocation.args?.query || queryFromMetadata || ""}
+                  language="sql"
+                  showLineNumbers={false}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Results accordion - for runQuery and visualizeData */}
+        {(isRunQuery || isVisualization) && !isLoading && (
+          <div className="mt-1 space-y-1">
+            {hasError ? (
+              <div className="text-xs text-red-400 mt-1">
+                Error: {display?.queryResult?.error}
+              </div>
+            ) : hasResults ? (
+              <>
+                <div
+                  onClick={() => setResultsOpen((prev) => !prev)}
+                  className="flex items-center gap-0.5 text-xs text-zinc-500 hover:text-zinc-300 transition-all cursor-pointer select-none"
+                >
+                  <ChevronRight
+                    className={cn("size-3.5 transition-transform", resultsOpen && "rotate-90")}
+                  />
+                  View Results ({queryResults?.totalCount} rows)
+                </div>
+                {resultsOpen && queryResults && (
+                  <div className="max-w-md max-h-48 overflow-auto border rounded bg-zinc-950/50 mt-1">
+                    <QueryResultPreview records={queryResults.records} />
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {/* Visualization loading state */}
+      {isVisualization && isLoading && (
+        <div className="mt-2 w-80">
+          <VisualizationLoading />
+        </div>
+      )}
+
+      {/* Rendered visualization */}
+      {isVisualization && display?.visualization && (
+        <div className="mt-2 w-96">
+          <DataVisualization visualization={display.visualization} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QueryResultPreview({ records }: { records: any[] }) {
+  if (!records || records.length === 0) {
+    return <div className="p-2 text-xs text-zinc-500">No results</div>;
+  }
+
+  const columns = Object.keys(records[0]);
+  const displayRecords = records.slice(0, 10); // Show max 10 rows in preview
+
+  return (
+    <table className="w-full text-xs">
+      <thead className="bg-zinc-900 sticky top-0">
+        <tr>
+          {columns.map((col) => (
+            <th key={col} className="px-2 py-1 text-left text-zinc-400 font-medium border-b border-zinc-800">
+              {col}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {displayRecords.map((row, i) => (
+          <tr key={i} className="border-b border-zinc-800/50 hover:bg-zinc-900/50">
+            {columns.map((col) => (
+              <td key={col} className="px-2 py-1 text-zinc-300 truncate max-w-32">
+                {row[col] === null ? <span className="text-zinc-500">null</span> : String(row[col])}
+              </td>
+            ))}
+          </tr>
+        ))}
+        {records.length > 10 && (
+          <tr>
+            <td colSpan={columns.length} className="px-2 py-1 text-zinc-500 text-center">
+              ... and {records.length - 10} more rows
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
 }
 
 function ChatMessage({
@@ -936,7 +1186,8 @@ function ChatMessage({
 }) {
   const fromUser = message.role === "user";
 
-  const [queryPreviewOpen, setQueryPreviewOpen] = useState(false);
+  // Extract visualizations from tool invocations
+  const toolParts = message.parts.filter((i) => i.type === "tool-invocation");
 
   return (
     <div
@@ -946,49 +1197,21 @@ function ChatMessage({
       )}
     >
       {message.role === "assistant" &&
-        message.parts
-          .filter((i) => i.type === "tool-invocation")
-          .map((k, index) => (
-            <div
+        toolParts.map((k, index) => {
+          if (k.type !== "tool-invocation") return null;
+          
+          const display = toolDisplay(k);
+
+          return (
+            <ToolResultAccordion
               key={index}
-              className="border p-2 rounded-sm bg-zinc-900/75 w-fit my-1"
-            >
-              <div className="flex gap-1.5 items-center text-xs text-zinc-400">
-                {k.toolInvocation.state === "partial-call" &&
-                  k.toolInvocation.toolName === "askForPermission" && (
-                    <Spinner className="size-3.5" />
-                  )}
-                {k.toolInvocation.state === "result" && (
-                  <Check className="size-3.5 text-green-500" />
-                )}
-                {toolDisplay(k)}
-              </div>
-              {k.toolInvocation.toolName === "askForPermission" &&
-                k.toolInvocation.args?.query && (
-                  <div className="mt-2 space-y-2 flex flex-1 flex-col overflow-auto">
-                    <div
-                      onClick={() => setQueryPreviewOpen((prev) => !prev)}
-                      className="flex items-center gap-0.5 text-xs text-zinc-500 hover:text-zinc-300 transition-all cursor-default select-none"
-                    >
-                      <ChevronRight
-                        className={cn(
-                          "size-3.5",
-                          queryPreviewOpen && "rotate-90"
-                        )}
-                      />{" "}
-                      View Query
-                    </div>
-                    {queryPreviewOpen && (
-                      <TomeSyntaxHighlighter
-                        content={k.toolInvocation.args.query}
-                        language="sql"
-                        showLineNumbers={false}
-                      />
-                    )}
-                  </div>
-                )}
-            </div>
-          ))}
+              toolName={k.toolInvocation.toolName}
+              display={display}
+              toolInvocation={k.toolInvocation}
+              messageMetadata={message.metadata}
+            />
+          );
+        })}
 
       {message.content.trim() !== "" && (
         <>

@@ -2,6 +2,7 @@ import { Tool, tool } from "ai";
 import { ToolMap } from "core/ai";
 import { SetStateAction } from "react";
 import { z } from "zod";
+import { VisualizationConfig, VisualizationData } from "@/components/dataVisualization";
 
 const queryObject = z.object({
   query: z.string().describe("The new query to replace or apppend"),
@@ -12,11 +13,25 @@ const queryObject = z.object({
     ),
 });
 
+const visualizationConfigSchema = z.object({
+  chartType: z.enum(["bar", "line", "pie", "area"]).describe(
+    "The type of chart to render. Use 'bar' for comparing categories, 'line' for trends over time, 'area' for cumulative trends, 'pie' for proportions/percentages"
+  ),
+  xAxis: z.string().describe("The column name to use for the X axis (categories or time series)"),
+  yAxis: z.union([z.string(), z.array(z.string())]).describe(
+    "The column name(s) to use for the Y axis (values). Can be a single column or array for multiple series"
+  ),
+  title: z.string().optional().describe("A descriptive title for the visualization"),
+  description: z.string().optional().describe("A brief description explaining what the visualization shows"),
+});
+
 export function getAgentTools({
   query,
   setQuery,
   runQueryFn,
+  runQueryForVisualizationFn,
   getSchemaFn,
+  onVisualize,
 }: {
   query?: string;
   setQuery?: React.Dispatch<SetStateAction<string>>;
@@ -25,7 +40,13 @@ export function getAgentTools({
     connectionId: number,
     query: string
   ) => any;
+  runQueryForVisualizationFn?: (
+    connectionName: string,
+    connectionId: number,
+    query: string
+  ) => any;
   getSchemaFn: (connectionName: string, connectionId: number) => any;
+  onVisualize?: (visualization: VisualizationData) => void;
 }): ToolMap {
   let updateQuery: Tool<any, any> | undefined = undefined;
   let updateQuerySection: Tool<any, any> | undefined = undefined;
@@ -193,6 +214,84 @@ export function getAgentTools({
     },
   });
 
+  const visualizeData = tool({
+    description: `Query data and visualize it as a chart. Use this tool when the user wants to see data visualized, analyze trends, compare values, or see distributions. 
+The tool runs a SQL query and renders the results as a chart in the chat interface.
+Choose the appropriate chart type:
+- "bar": Best for comparing discrete categories or groups
+- "line": Best for showing trends over time or continuous data
+- "area": Best for showing cumulative totals or stacked comparisons over time  
+- "pie": Best for showing proportions/percentages of a whole (use sparingly, only for <8 categories)
+
+IMPORTANT: The query should return data suitable for visualization:
+- Keep result sets reasonable (ideally <100 rows for best performance)
+- Use GROUP BY, aggregations (COUNT, SUM, AVG) to summarize data
+- Order results appropriately (e.g., by date for time series, by value for rankings)`,
+    parameters: z.object({
+      query: z.string().describe("The SQL query to run to get data for visualization"),
+      connectionId: z
+        .number()
+        .describe("The connection ID from the database list"),
+      connectionName: z
+        .string()
+        .describe("The connection name from the database list"),
+      config: visualizationConfigSchema.describe("Configuration for how to visualize the data"),
+    }),
+    execute: async ({ query: sqlQuery, connectionId, connectionName, config }) => {
+      try {
+        // Use visualization-specific query function if available (higher row limit)
+        const queryFn = runQueryForVisualizationFn ?? runQueryFn;
+        const result = await queryFn(connectionName, connectionId, sqlQuery);
+        
+        if (result && "error" in result) {
+          return JSON.stringify({ error: result.error });
+        }
+
+        // Handle both property naming conventions (records/totalCount from executeQuery, rows/rowCount from direct)
+        const rows = result?.records ?? result?.rows ?? [];
+        const totalCount = result?.totalCount ?? result?.rowCount ?? rows.length;
+
+        // Validate that the specified columns exist in the result
+        const columns = result?.columns ?? (rows.length > 0 ? Object.keys(rows[0]) : []);
+        
+        if (!columns.includes(config.xAxis)) {
+          return JSON.stringify({ 
+            error: `Column "${config.xAxis}" not found in query results. Available columns: ${columns.join(", ")}` 
+          });
+        }
+
+        const yAxes = Array.isArray(config.yAxis) ? config.yAxis : [config.yAxis];
+        for (const yCol of yAxes) {
+          if (!columns.includes(yCol)) {
+            return JSON.stringify({ 
+              error: `Column "${yCol}" not found in query results. Available columns: ${columns.join(", ")}` 
+            });
+          }
+        }
+
+        const visualization: VisualizationData = {
+          data: rows,
+          config: config as VisualizationConfig,
+          query: sqlQuery,
+          totalRows: totalCount,
+        };
+
+        // Call the visualization callback if provided (for editor mode integration)
+        if (onVisualize) {
+          onVisualize(visualization);
+        }
+
+        return JSON.stringify({
+          success: true,
+          visualization,
+          summary: `Visualized ${totalCount} rows as a ${config.chartType} chart showing ${config.title || `${yAxes.join(", ")} by ${config.xAxis}`}`,
+        });
+      } catch (error: any) {
+        return JSON.stringify({ error: error.message || "Failed to visualize data" });
+      }
+    },
+  });
+
   const askForPermission = tool({
     description: "Ask the user for permission to run destructive queries",
     parameters: z.object({
@@ -206,6 +305,7 @@ export function getAgentTools({
       updateQuerySection,
       runQuery,
       getSchema,
+      visualizeData,
       askForPermission,
     };
   }
@@ -213,6 +313,7 @@ export function getAgentTools({
   return {
     runQuery,
     getSchema,
+    visualizeData,
     askForPermission,
   };
 }
