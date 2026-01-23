@@ -1,10 +1,10 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useQueryData } from "@/queryDataProvider";
 import Spinner from "./ui/spinner";
 import { JsonQueryResult } from "core/connections";
 import { Button } from "./ui/button";
-import { Check, Copy, FileOutput, X } from "lucide-react";
+import { Check, Copy, FileOutput, X, Save, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -18,8 +18,20 @@ import {
 import { FaFileCsv, FaFileExcel, FaMarkdown } from "react-icons/fa";
 import { toast } from "sonner";
 
+// Types for cell editing
+export interface CellEdit {
+  rowIndex: number;
+  column: string;
+  originalValue: any;
+  newValue: any;
+}
+
+export interface EditedCells {
+  [key: string]: CellEdit; // key format: "rowIndex-column"
+}
+
 export default function QueryDisplay() {
-  const { loadingQuery, queryResult, queryError } = useQueryData();
+  const { loadingQuery, queryResult, queryError, currentConnection, runQuery, currentQuery } = useQueryData();
   const [selectedRecords, setSelectedRecords] = useState<any[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(
     new Set()
@@ -27,6 +39,255 @@ export default function QueryDisplay() {
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(
     null
   );
+  const [editedCells, setEditedCells] = useState<EditedCells>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Clear edits when query result changes
+  useEffect(() => {
+    setEditedCells({});
+  }, [queryResult]);
+
+  // Handle cell edit
+  const handleCellEdit = useCallback((rowIndex: number, column: string, originalValue: any, newValue: any) => {
+    const key = `${rowIndex}-${column}`;
+    
+    setEditedCells(prev => {
+      // If the new value matches the original, remove the edit
+      if (newValue === originalValue || (newValue === "" && originalValue === null)) {
+        const { [key]: _, ...rest } = prev;
+        return rest;
+      }
+      
+      return {
+        ...prev,
+        [key]: { rowIndex, column, originalValue, newValue }
+      };
+    });
+  }, []);
+
+  // Discard all edits
+  const handleDiscardChanges = useCallback(() => {
+    setEditedCells({});
+    toast.success("All changes discarded");
+  }, []);
+
+  // Helper to format SQL value based on type and database engine
+  const formatSqlValue = useCallback((value: any, engine: string): string => {
+    if (value === null || value === undefined) {
+      return "NULL";
+    }
+    if (value === "null" || value === "NULL") {
+      return "NULL";
+    }
+    if (typeof value === "boolean") {
+      return value ? "TRUE" : "FALSE";
+    }
+    if (typeof value === "number") {
+      return String(value);
+    }
+    if (value instanceof Date) {
+      return `'${value.toISOString()}'`;
+    }
+    if (Array.isArray(value)) {
+      // Handle arrays - PostgreSQL uses ARRAY syntax or '{...}' format
+      if (engine === "Postgres") {
+        // Format as PostgreSQL array literal: '{val1,val2,val3}'
+        const formattedElements = value.map(v => {
+          if (v === null) return "NULL";
+          if (typeof v === "string") return `"${v.replace(/"/g, '\\"')}"`;
+          return String(v);
+        });
+        return `'{${formattedElements.join(",")}}'`;
+      }
+      // For other databases, store as JSON
+      return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+    }
+    if (typeof value === "object") {
+      // Handle JSON/objects
+      if (engine === "Postgres") {
+        // PostgreSQL JSONB/JSON - use proper casting
+        return `'${JSON.stringify(value).replace(/'/g, "''")}'::jsonb`;
+      }
+      return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+    }
+    // String value - escape single quotes
+    return `'${String(value).replace(/'/g, "''")}'`;
+  }, []);
+
+  // Helper to quote identifier based on database engine
+  const quoteIdentifier = useCallback((identifier: string, engine: string): string => {
+    switch (engine) {
+      case "MySQL":
+        return `\`${identifier}\``;
+      case "SQLite":
+      case "Postgres":
+      default:
+        return `"${identifier}"`;
+    }
+  }, []);
+
+  // Save all edits
+  const handleSaveChanges = useCallback(async () => {
+    if (!currentConnection || !currentQuery || Object.keys(editedCells).length === 0) return;
+    
+    setIsSaving(true);
+    
+    try {
+      const engine = currentConnection.engine;
+      
+      // Group edits by row
+      const editsByRow = new Map<number, CellEdit[]>();
+      Object.values(editedCells).forEach(edit => {
+        const existing = editsByRow.get(edit.rowIndex) || [];
+        existing.push(edit);
+        editsByRow.set(edit.rowIndex, existing);
+      });
+
+      // Try to extract table name from the query (handles schema.table format too)
+      // Pattern: FROM [schema.]table - handles quotes, backticks, and no quotes
+      const tableMatch = currentQuery.query.match(/FROM\s+["'`]?(\w+)["'`]?(?:\.["'`]?(\w+)["'`]?)?/i);
+      if (!tableMatch) {
+        toast.error("Could not determine table name from query. Please ensure your query includes a FROM clause.");
+        return;
+      }
+      
+      // If there's a second capture group, first is schema, second is table
+      // Otherwise, first is the table
+      let schemaName: string | undefined;
+      let tableName: string;
+      if (tableMatch[2]) {
+        schemaName = tableMatch[1];
+        tableName = tableMatch[2];
+      } else {
+        tableName = tableMatch[1];
+      }
+      
+      const fullTableName = schemaName 
+        ? `${quoteIdentifier(schemaName, engine)}.${quoteIdentifier(tableName, engine)}`
+        : quoteIdentifier(tableName, engine);
+      
+      console.log("Extracted table:", { schemaName, tableName, fullTableName });
+
+      // Get the columns to use for WHERE clause
+      const columns = queryResult?.columns || [];
+      
+      // Generate and execute UPDATE statements for each edited row
+      for (const [rowIndex, edits] of editsByRow) {
+        const row = queryResult?.rows[rowIndex];
+        if (!row) continue;
+
+        // Build SET clause
+        const setClauses = edits.map(edit => {
+          const quotedCol = quoteIdentifier(edit.column, engine);
+          const formattedValue = formatSqlValue(edit.newValue, engine);
+          return `${quotedCol} = ${formattedValue}`;
+        });
+
+        // Build WHERE clause - prefer using 'id' column if available (likely primary key)
+        const whereClauses: string[] = [];
+        
+        // Common primary key column names to look for
+        const pkCandidates = ['id', 'ID', 'Id', '_id', 'uuid', 'UUID'];
+        const pkColumn = pkCandidates.find(pk => columns.includes(pk));
+        
+        if (pkColumn && row[pkColumn] !== null && row[pkColumn] !== undefined) {
+          // Use only the primary key for WHERE clause
+          const quotedCol = quoteIdentifier(pkColumn, engine);
+          const formattedValue = formatSqlValue(row[pkColumn], engine);
+          whereClauses.push(`${quotedCol} = ${formattedValue}`);
+          console.log("Using primary key column for WHERE:", pkColumn);
+        } else {
+          // Fall back to using simple columns (skip arrays, objects, dates)
+          console.log("No primary key found, using all simple columns for WHERE");
+          for (const col of columns) {
+            const originalValue = row[col];
+            const quotedCol = quoteIdentifier(col, engine);
+            
+            if (originalValue === null || originalValue === undefined) {
+              whereClauses.push(`${quotedCol} IS NULL`);
+            } else if (Array.isArray(originalValue)) {
+              // Skip arrays - problematic for comparison
+              continue;
+            } else if (originalValue instanceof Date) {
+              // Skip dates - precision issues with comparison
+              continue;
+            } else if (typeof originalValue === "object") {
+              // Skip complex objects
+              continue;
+            } else {
+              const formattedValue = formatSqlValue(originalValue, engine);
+              whereClauses.push(`${quotedCol} = ${formattedValue}`);
+            }
+          }
+        }
+
+        if (whereClauses.length === 0) {
+          toast.error("Cannot identify row - no usable columns for WHERE clause. Ensure query includes a primary key column.");
+          return;
+        }
+
+        const updateQuery = `UPDATE ${fullTableName} SET ${setClauses.join(", ")} WHERE ${whereClauses.join(" AND ")}`;
+        
+        console.log("Executing UPDATE:", updateQuery); // Debug logging
+        console.log("WHERE values:", whereClauses);
+        
+        const result = await runQuery(currentConnection, updateQuery);
+        console.log("UPDATE result:", result);
+        
+        if (result && "error" in result) {
+          toast.error(`Failed to save row ${rowIndex + 1}: ${result.error}`);
+          return;
+        }
+        
+        // Check if any rows were actually updated
+        const rowCount = result && "rowCount" in result ? result.rowCount : -1;
+        console.log("Rows affected:", rowCount);
+        
+        if (rowCount === 0) {
+          toast.error(`Row ${rowIndex + 1} was not found - WHERE clause may not match. Check console for details.`);
+          return;
+        }
+      }
+
+      // Clear edits and refresh data
+      setEditedCells({});
+      toast.success(`Successfully saved ${editsByRow.size} row(s)`);
+      
+      // Re-run the original query to refresh the data
+      await runQuery(currentConnection, currentQuery.query);
+      
+    } catch (error: any) {
+      toast.error(`Failed to save changes: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [currentConnection, currentQuery, editedCells, queryResult, runQuery, formatSqlValue, quoteIdentifier]);
+
+  // Keyboard shortcuts for save (Ctrl+S) and discard (Escape)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const hasEdits = Object.keys(editedCells).length > 0;
+      
+      // Ctrl+S or Cmd+S to save
+      if ((e.ctrlKey || e.metaKey) && e.key === "s" && hasEdits) {
+        e.preventDefault();
+        handleSaveChanges();
+      }
+      
+      // Escape to discard (only if not in an input field)
+      if (e.key === "Escape" && hasEdits) {
+        const activeElement = document.activeElement;
+        const isInInput = activeElement?.tagName === "INPUT" || activeElement?.tagName === "TEXTAREA";
+        if (!isInInput) {
+          e.preventDefault();
+          handleDiscardChanges();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editedCells, handleSaveChanges, handleDiscardChanges]);
 
   // Handle record selection with click and shift-click
   const handleRecordClick = useCallback(
@@ -75,6 +336,8 @@ export default function QueryDisplay() {
     setLastSelectedIndex(null);
   }, []);
 
+  const hasEdits = Object.keys(editedCells).length > 0;
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <QueryToolbar
@@ -82,6 +345,11 @@ export default function QueryDisplay() {
         totalCount={queryResult?.rowCount ?? 0}
         selectedRecords={selectedRecords}
         onClearSelection={clearSelection}
+        hasEdits={hasEdits}
+        editCount={Object.keys(editedCells).length}
+        onSaveChanges={handleSaveChanges}
+        onDiscardChanges={handleDiscardChanges}
+        isSaving={isSaving}
       />
       {loadingQuery && (
         <div className="flex flex-1 gap-2 items-center justify-center">
@@ -95,6 +363,8 @@ export default function QueryDisplay() {
           result={queryResult}
           selectedRecords={selectedIndices}
           onRecordClick={handleRecordClick}
+          editedCells={editedCells}
+          onCellEdit={handleCellEdit}
         />
       )}
     </div>
@@ -106,11 +376,21 @@ function QueryToolbar({
   selectedRecords,
   totalCount,
   onClearSelection,
+  hasEdits,
+  editCount,
+  onSaveChanges,
+  onDiscardChanges,
+  isSaving,
 }: {
   queryResult: JsonQueryResult | null;
   selectedRecords: any[];
   totalCount: number;
   onClearSelection: () => void;
+  hasEdits?: boolean;
+  editCount?: number;
+  onSaveChanges?: () => void;
+  onDiscardChanges?: () => void;
+  isSaving?: boolean;
 }) {
   return (
     <div className="w-full flex justify-between items-center p-1.5 border-b border-zinc-800 flex-shrink-0">
@@ -124,6 +404,40 @@ function QueryToolbar({
           queryResult={queryResult}
           selectedRecords={selectedRecords}
         />
+
+        {/* Save/Discard buttons when there are edits */}
+        {hasEdits && (
+          <>
+            <div className="w-px h-4 bg-zinc-700 mx-1" />
+            <Button
+              size="xs"
+              variant="default"
+              onClick={onSaveChanges}
+              disabled={isSaving}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {isSaving ? (
+                <Spinner className="size-3" />
+              ) : (
+                <Save className="size-3" />
+              )}
+              Save Changes
+            </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={onDiscardChanges}
+              disabled={isSaving}
+              className="text-zinc-400 hover:text-zinc-200"
+            >
+              <Undo2 className="size-3" />
+              Discard
+            </Button>
+            <span className="text-xs text-orange-400">
+              {editCount} cell{editCount !== 1 ? "s" : ""} modified
+            </span>
+          </>
+        )}
       </div>
       {selectedRecords.length > 0 && (
         <div className="flex items-center gap-1.5">
@@ -516,11 +830,15 @@ export function QueryResultTable({
   selectedRecords,
   onRecordClick,
   className = "",
+  editedCells = {},
+  onCellEdit,
 }: {
   result: JsonQueryResult | null | undefined;
   selectedRecords: Set<number>;
   onRecordClick: (index: number, shiftKey: boolean, ctrlKey: boolean) => void;
   className?: string;
+  editedCells?: EditedCells;
+  onCellEdit?: (rowIndex: number, column: string, originalValue: any, newValue: any) => void;
 }) {
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
@@ -701,21 +1019,127 @@ export function QueryResultTable({
                     {virtualRow.index + 1}
                   </div>
                   {/* Data cells */}
-                  {result.columns.map((c, index) => (
-                    <div
-                      key={c}
-                      className="px-3 py-1 overflow-hidden text-ellipsis flex-shrink-0 text-xs border-r border-zinc-700"
-                      style={{ width: `${columnWidths[index + 1]}px` }}
-                    >
-                      {formatCell(row[c])}
-                    </div>
-                  ))}
+                  {result.columns.map((c, index) => {
+                    const cellKey = `${virtualRow.index}-${c}`;
+                    const isEdited = cellKey in editedCells;
+                    const displayValue = isEdited ? editedCells[cellKey].newValue : row[c];
+                    
+                    return (
+                      <EditableCell
+                        key={c}
+                        value={displayValue}
+                        originalValue={row[c]}
+                        isEdited={isEdited}
+                        width={columnWidths[index + 1]}
+                        onEdit={onCellEdit ? (newValue) => onCellEdit(virtualRow.index, c, row[c], newValue) : undefined}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             );
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Editable cell component
+function EditableCell({
+  value,
+  originalValue,
+  isEdited,
+  width,
+  onEdit,
+}: {
+  value: any;
+  originalValue: any;
+  isEdited: boolean;
+  width: number;
+  onEdit?: (newValue: any) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onEdit) return;
+    setEditValue(value === null ? "" : String(value));
+    setIsEditing(true);
+  }, [value, onEdit]);
+
+  const handleBlur = useCallback(() => {
+    setIsEditing(false);
+    if (onEdit) {
+      // Convert empty string back to null if original was null
+      const newValue = editValue === "" && originalValue === null ? null : editValue;
+      onEdit(newValue);
+    }
+  }, [editValue, originalValue, onEdit]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleBlur();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setIsEditing(false);
+      setEditValue(value === null ? "" : String(value));
+    }
+  }, [handleBlur, value]);
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    // Stop propagation to prevent row selection when interacting with the cell
+    if (isEditing) {
+      e.stopPropagation();
+    }
+  }, [isEditing]);
+
+  if (isEditing) {
+    return (
+      <div
+        className={cn(
+          "px-1 py-0.5 flex-shrink-0 text-xs border-r border-zinc-700",
+          isEdited && "bg-orange-500/20"
+        )}
+        style={{ width: `${width}px` }}
+        onClick={handleClick}
+      >
+        <input
+          ref={inputRef}
+          type="text"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          className="w-full h-full bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded border border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-xs font-mono"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "px-3 py-1 overflow-hidden text-ellipsis flex-shrink-0 text-xs border-r border-zinc-700 cursor-text",
+        isEdited && "bg-orange-500/20 text-orange-200",
+        onEdit && "hover:bg-zinc-800/50"
+      )}
+      style={{ width: `${width}px` }}
+      onDoubleClick={handleDoubleClick}
+      title={onEdit ? "Double-click to edit" : undefined}
+    >
+      {formatCell(value)}
     </div>
   );
 }
