@@ -1,7 +1,7 @@
 {
   "name": "tome",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "Josh Kotrous",
   "homepage": "https://tomedb.dev",
   "type": "module",
@@ -26,6 +26,11 @@
     ],
     "appId": "com.joshkotrous.tome",
     "productName": "Tome",
+    "publish": {
+      "provider": "github",
+      "owner": "joshkotrous",
+      "repo": "tome"
+    },
     "files": [
       "dist/**",
       "dist-electron/**",
@@ -40,7 +45,11 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "icon": "public/tome.icns",
-      "artifactName": "tome-mac-${arch}.${ext}"
+      "artifactName": "tome-mac-${arch}.${ext}",
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "dmg": {
       "icon": "public/tome.icns",
@@ -120,6 +129,7 @@
     "drizzle-orm": "^0.44.1",
     "electron-log": "^5.4.0",
     "electron-notarize": "^1.2.2",
+    "electron-updater": "^6.3.9",
     "framer-motion": "^12.16.0",
     "keytar": "^7.9.0",
     "lucide-react": "^0.511.0",

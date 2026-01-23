@@ -21,6 +21,7 @@ const defaultSettings: Settings = {
       },
     },
   },
+  autoUpdates: true,
 };
 
 export async function initializeSettings(): Promise<{

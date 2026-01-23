@@ -8,6 +8,7 @@ import { createRequire } from "module";
 import { initializeSettings } from "../core/settings";
 import log from "electron-log/main";
 import fs from "fs/promises";
+import { setMainWindow } from "../core/autoUpdater";
 
 console.log = (...args) => log.info(...args);
 console.error = (...args) => log.error(...args);
@@ -87,6 +88,9 @@ async function createWindow() {
     },
   });
 
+  // Set up auto-updater with main window reference
+  setMainWindow(win);
+
   // Test active push message to Renderer-process.
   win.webContents.on("did-finish-load", () => {
     win?.webContents.send("main-process-message", new Date().toLocaleString());
@@ -130,3 +134,4 @@ import "./handlers/columns";
 import "./handlers/tables";
 import "./handlers/schemas";
 import "./handlers/proxy";
+import "./handlers/updates";

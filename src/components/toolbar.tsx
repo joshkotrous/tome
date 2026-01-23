@@ -3,10 +3,13 @@ import {
   FileCode,
   Loader2,
   LucideProps,
+  RefreshCw,
   Search,
   Settings,
   Sparkles,
+  Wrench,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "./ui/button";
 import AddDatabaseButton, { AddDatabaseDialog } from "./addDatabaseButton";
 import {
@@ -207,22 +210,28 @@ function SettingsDialog({
   children?: React.ReactNode;
 }) {
   const [selectedPage, setSelectedPage] =
-    useState<"AI Features">("AI Features");
+    useState<"AI Features" | "Advanced">("AI Features");
 
   const pageOptions: {
-    title: "AI Features";
+    title: "AI Features" | "Advanced";
     icon: React.ForwardRefExoticComponent<Omit<LucideProps, "ref">>;
   }[] = [
     {
       title: "AI Features",
       icon: Sparkles,
     },
+    {
+      title: "Advanced",
+      icon: Wrench,
+    },
   ];
 
-  function displayPage(page: "AI Features") {
+  function displayPage(page: "AI Features" | "Advanced") {
     switch (page) {
       case "AI Features":
         return <AIFeaturesSettingsPage />;
+      case "Advanced":
+        return <AdvancedSettingsPage />;
     }
   }
 
@@ -338,6 +347,197 @@ export function AIFeaturesSettingsPage({
             />
           </>
         )}
+
+        <Button
+          disabled={updating || !hasChanges()}
+          onClick={async () => await saveSettings(settings)}
+          variant="secondary"
+          className="w-full"
+        >
+          {updating ? (
+            <>
+              Saving... <Loader2 className="size-3 animate-spin ml-2" />
+            </>
+          ) : (
+            "Save Changes"
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function AdvancedSettingsPage() {
+  const { refreshSettings } = useAppData();
+  const [updating, setUpdating] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [settings, setSettings] = useState<SettingsType | null>(null);
+  const [initialSettings, setInitialSettings] = useState<SettingsType | null>(
+    null
+  );
+
+  useEffect(() => {
+    async function getData() {
+      const _settings = await window.settings.getSettings();
+      setSettings(_settings);
+      setInitialSettings(_settings);
+    }
+    getData();
+  }, []);
+
+  async function saveSettings(updated: SettingsType) {
+    setUpdating(true);
+    const _settings = await window.settings.updateSettings(updated);
+    setSettings(_settings);
+    setInitialSettings(_settings);
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    setUpdating(false);
+    refreshSettings();
+  }
+
+  async function handleCheckForUpdates() {
+    setCheckingUpdates(true);
+    try {
+      const updateInfo = await window.updates.checkForUpdates();
+
+      if (updateInfo.status === "available") {
+        toast.info(`Update v${updateInfo.latestVersion} available!`, {
+          description: `You're currently on v${updateInfo.currentVersion}`,
+          duration: 10000,
+          action: {
+            label: "Download Update",
+            onClick: async () => {
+              const toastId = toast.loading(
+                `Downloading update v${updateInfo.latestVersion}...`,
+                { description: "Starting download..." }
+              );
+
+              // Set up progress listener
+              const unsubscribeProgress = window.updates.onDownloadProgress(
+                (progress) => {
+                  toast.loading(
+                    `Downloading update... ${progress.percent.toFixed(0)}%`,
+                    {
+                      id: toastId,
+                      description: `${(progress.transferred / 1024 / 1024).toFixed(1)} MB / ${(progress.total / 1024 / 1024).toFixed(1)} MB`,
+                    }
+                  );
+                }
+              );
+
+              // Set up status listener
+              const unsubscribeStatus = window.updates.onUpdateStatus(
+                (data) => {
+                  if (data.status === "downloaded") {
+                    toast.dismiss(toastId);
+                    toast.success(
+                      `Update v${data.latestVersion} ready to install!`,
+                      {
+                        description:
+                          "The update will be installed when you restart the app.",
+                        duration: 0,
+                        action: {
+                          label: "Restart Now",
+                          onClick: async () => {
+                            await window.updates.installUpdate();
+                          },
+                        },
+                      }
+                    );
+                    unsubscribeProgress();
+                    unsubscribeStatus();
+                  } else if (data.status === "error") {
+                    toast.dismiss(toastId);
+                    toast.error("Update failed", {
+                      description: data.error || "An error occurred",
+                      duration: 5000,
+                    });
+                    unsubscribeProgress();
+                    unsubscribeStatus();
+                  }
+                }
+              );
+
+              await window.updates.downloadUpdate();
+            },
+          },
+        });
+      } else if (updateInfo.status === "error") {
+        toast.error("Failed to check for updates", {
+          description: updateInfo.error || "Please try again later",
+          duration: 3000,
+        });
+      } else {
+        toast.success("You're up to date!", {
+          description: `Current version: v${updateInfo.currentVersion}`,
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to check for updates:", error);
+      toast.error("Failed to check for updates", {
+        description: "Please try again later",
+        duration: 3000,
+      });
+    } finally {
+      setCheckingUpdates(false);
+    }
+  }
+
+  const hasChanges = () => {
+    if (!initialSettings || !settings) return false;
+    return JSON.stringify(initialSettings) !== JSON.stringify(settings);
+  };
+
+  if (!settings) {
+    return (
+      <div className="pt-1 space-y-4 size-full h-64 flex items-center justify-center">
+        <Loader2 className="size-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-1 space-y-4 w-full">
+      <h2 className="font-semibold text-xl">Advanced</h2>
+      <div className="space-y-3">
+        <div className="bg-zinc-900 p-4 px-4 space-y-2 rounded-md">
+          <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">Auto Updates</span>
+              <span className="text-zinc-400 text-sm">
+                Automatically download and install updates when available
+              </span>
+            </div>
+            <Switch
+              checked={settings.autoUpdates ?? true}
+              onCheckedChange={(autoUpdates) =>
+                setSettings((prev) => ({
+                  ...prev!,
+                  autoUpdates,
+                }))
+              }
+            />
+          </div>
+        </div>
+
+        <Button
+          disabled={checkingUpdates}
+          onClick={handleCheckForUpdates}
+          variant="outline"
+          className="w-full"
+        >
+          {checkingUpdates ? (
+            <>
+              Checking... <Loader2 className="size-3 animate-spin ml-2" />
+            </>
+          ) : (
+            <>
+              <RefreshCw className="size-4 mr-2" />
+              Check for Updates
+            </>
+          )}
+        </Button>
 
         <Button
           disabled={updating || !hasChanges()}

@@ -70,11 +70,14 @@ jobs:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
 
-      - name: Upload DMGs
+      - name: Upload Mac artifacts
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
-          files: dist/*.dmg
+          files: |
+            dist/*.dmg
+            dist/*.zip
+            dist/latest-mac.yml
           generate_release_notes: true
 
   # ─────────────────── 2. Windows installer ─────────────────────────
@@ -96,11 +99,13 @@ jobs:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
 
-      - name: Upload EXE
+      - name: Upload Windows artifacts
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
-          files: dist/*.exe
+          files: |
+            dist/*.exe
+            dist/latest.yml
           generate_release_notes: false
 
   # ─────────────────── 3. Linux AppImage ────────────────────────────
@@ -122,9 +127,11 @@ jobs:
           APPLEIDPASS: ${{ secrets.APPLEIDPASS }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-      - name: Upload AppImage
+      - name: Upload Linux artifacts
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
-          files: dist/*.AppImage
+          files: |
+            dist/*.AppImage
+            dist/latest-linux.yml
           generate_release_notes: false

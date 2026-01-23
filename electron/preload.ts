@@ -31,3 +31,4 @@ import "./bridge/columns";
 import "./bridge/schemas";
 import "./bridge/tables";
 import "./bridge/proxy";
+import "./bridge/updates";
