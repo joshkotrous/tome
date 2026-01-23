@@ -11,6 +11,7 @@ import {
   Plug,
   RefreshCcw,
   SidebarClose,
+  Sparkles,
   Table,
   Trash,
   Unplug,
@@ -269,7 +270,87 @@ export function DBInformation({ db }: { db: Connection }) {
           <div className="aspect-square size-2 bg-green-500 rounded-full blur-[2px]" />
         )}
         {indexJobs.length > 0 && (
-          <RefreshCcw className="size-3 animate-spin text-zinc-400" />
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <div className="relative size-3.5 flex items-center justify-center cursor-help">
+                {/* Circular progress ring */}
+                <svg
+                  className="absolute inset-0 size-3.5"
+                  viewBox="0 0 36 36"
+                >
+                  {/* Background ring */}
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="15"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    className="text-zinc-700"
+                  />
+                  {/* Animated progress ring */}
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="15"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    className="text-blue-500"
+                    strokeDasharray="94.2"
+                    strokeDashoffset="25"
+                    style={{
+                      transformOrigin: "center",
+                      animation: "spin 1s linear infinite",
+                    }}
+                  />
+                </svg>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-xs p-3">
+              <div className="flex flex-col gap-2 min-w-[160px]">
+                <span className="font-medium text-zinc-200">Updating Semantic Index</span>
+                {(() => {
+                  // Aggregate progress from all jobs
+                  const totalToProcess = indexJobs.reduce((sum, job) => sum + (job.itemsToProcess || 0), 0);
+                  const totalProcessed = indexJobs.reduce((sum, job) => sum + (job.itemsProcessed || 0), 0);
+                  const hasProgress = totalToProcess > 0;
+                  const progress = hasProgress ? Math.round((totalProcessed / totalToProcess) * 100) : null;
+                  
+                  return (
+                    <div className="flex flex-col gap-1.5">
+                      {/* Progress bar */}
+                      <div className="w-full h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                        {hasProgress ? (
+                          <div
+                            className="h-full bg-blue-500 rounded-full transition-all"
+                            style={{ width: `${progress}%` }}
+                          />
+                        ) : (
+                          <div
+                            className="h-full bg-blue-500 rounded-full w-1/3"
+                            style={{
+                              animation: "indeterminate 1.5s ease-in-out infinite",
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-zinc-400">
+                          Indexing databases, schemas, tables...
+                        </span>
+                        <span className="text-zinc-500">
+                          {totalProcessed} / {totalToProcess} items processed
+                          {hasProgress && ` (${progress}%)`}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </TooltipContent>
+          </Tooltip>
         )}
         {displayLogo(db.engine)}
       </div>
@@ -685,6 +766,13 @@ function ConnectionListContextMenu({
                   </ContextMenuItem>
                   <ContextMenuItem>
                     <ArchiveRestore /> Restore
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => {
+                      window.jobs.updateSemanticIndex(item);
+                    }}
+                  >
+                    <Sparkles /> Update Semantic Index
                   </ContextMenuItem>
                 </ContextMenuSubContent>
               </ContextMenuSub>

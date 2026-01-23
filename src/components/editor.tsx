@@ -203,38 +203,11 @@ export function SqlEditor() {
       editor.trigger("keyboard", "editor.action.triggerSuggest", undefined)
     );
 
+    // Register the schema-aware completion provider
     const disposable = monaco.languages.registerCompletionItemProvider(
       "sql",
       createSchemaCompletionProvider(_schema, currentConnection)
     );
-
-    monaco.languages.registerCompletionItemProvider("sql", {
-      triggerCharacters: [" ", "."],
-      provideCompletionItems: (model, position) => {
-        const word = model.getWordUntilPosition(position);
-        const range: monacoEditor.IRange = {
-          startLineNumber: position.lineNumber,
-          endLineNumber: position.lineNumber,
-          startColumn: word.startColumn,
-          endColumn: word.endColumn,
-        };
-        const suggestions: monacoEditor.languages.CompletionItem[] = [
-          {
-            label: "select",
-            kind: monacoEditor.languages.CompletionItemKind.Keyword,
-            insertText: "SELECT ",
-            range,
-          },
-          {
-            label: "from",
-            kind: monacoEditor.languages.CompletionItemKind.Keyword,
-            insertText: "FROM ",
-            range,
-          },
-        ];
-        return { suggestions };
-      },
-    });
 
     return disposable;
   };

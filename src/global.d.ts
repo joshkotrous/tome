@@ -84,12 +84,8 @@ interface QueriesApi {
 interface ProxyApi {
   fetchStream: (
     url: string,
-    options?: ProxyRequestOptions
+    options?: Record<string, unknown>
   ) => Promise<ProxyStreamResponse>;
-  onStreamData: (
-    streamId: string,
-    callback: (data: StreamData) => void
-  ) => () => void;
 }
 
 interface JobsApi {
@@ -97,6 +93,7 @@ interface JobsApi {
     connection: number,
     status?: IndexJob["status"]
   ) => Promise<IndexJob[]>;
+  updateSemanticIndex: (connection: Connection) => Promise<Connection>;
 }
 
 interface ColumnsApi {

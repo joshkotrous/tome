@@ -129,3 +129,4 @@ import "./handlers/jobs";
 import "./handlers/columns";
 import "./handlers/tables";
 import "./handlers/schemas";
+import "./handlers/proxy";

@@ -13,7 +13,112 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { streamText } from "ai";
 import { AIProvider } from "../../src/types";
+import { createMainProcessAIProxy } from "./proxy";
 import z from "zod";
+
+/**
+ * Detect if we're running in the main process (Node.js) or renderer process (browser).
+ * Returns the appropriate fetch proxy based on the environment.
+ */
+function getProxyFetch(): typeof fetch {
+  // Check if we're in a browser/renderer environment with IPC proxy available
+  const isRenderer = typeof window !== "undefined" && window.proxy?.fetchStream;
+  
+  if (isRenderer) {
+    // Create IPC-based proxy inline for renderer process (avoids CORS)
+    return createRendererProxy();
+  }
+  
+  // Use direct fetch for main process
+  return createMainProcessAIProxy();
+}
+
+/**
+ * Creates a fetch proxy for the renderer process that routes through IPC
+ * to avoid CORS restrictions.
+ */
+function createRendererProxy(): typeof fetch {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    let urlString: string;
+    let method: string = "GET";
+    let headers: Record<string, string> = {};
+    let body: string | undefined;
+
+    if (input instanceof Request) {
+      const clonedRequest = input.clone();
+      urlString = clonedRequest.url;
+      method = clonedRequest.method;
+      clonedRequest.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+      try {
+        body = await clonedRequest.text();
+      } catch {
+        // Body might already be consumed
+      }
+    } else {
+      urlString = input.toString();
+    }
+
+    if (init?.method) method = init.method;
+    if (init?.headers) {
+      const initHeaders = init.headers instanceof Headers
+        ? Object.fromEntries(init.headers.entries())
+        : Object.entries(init.headers as Record<string, string>).reduce((acc, [key, value]) => {
+            acc[key] = Array.isArray(value) ? value.join(", ") : String(value);
+            return acc;
+          }, {} as Record<string, string>);
+      headers = { ...headers, ...initHeaders };
+    }
+    if (init?.body !== undefined) {
+      body = typeof init.body === "string" ? init.body : String(init.body);
+    }
+
+    const needsProxy = urlString.includes("api.anthropic.com") || urlString.includes("api.openai.com");
+    if (!needsProxy) {
+      return fetch(input, init);
+    }
+
+    const result = await window.proxy.fetchStream(urlString, { method, headers, body });
+
+    if (!result.ok) {
+      throw new Error(`HTTP ${result.status}: ${(result as any).error || result.statusText || "Unknown error"}`);
+    }
+
+    if (!result.streamId) {
+      throw new Error("No stream ID returned from proxy");
+    }
+
+    const streamId = result.streamId;
+    const channel = `ai-stream-${streamId}`;
+    
+    const stream = new ReadableStream({
+      start(controller) {
+        const listener = (_event: unknown, data: { chunk?: string; done: boolean; error?: string }) => {
+          if (data.error) {
+            controller.error(new Error(data.error));
+            window.ipcRenderer.off(channel, listener);
+            return;
+          }
+          if (data.done) {
+            controller.close();
+            window.ipcRenderer.off(channel, listener);
+            return;
+          }
+          if (data.chunk) {
+            controller.enqueue(new TextEncoder().encode(data.chunk));
+          }
+        };
+        window.ipcRenderer.on(channel, listener);
+      },
+    });
+
+    return new Response(stream, {
+      status: result.status,
+      headers: new Headers(result.headers || {}),
+    });
+  };
+}
 
 export const TomeOAIAgentModelObject = z.enum([
   "gpt-4o",
@@ -173,7 +278,8 @@ function streamOpenAI(
   toolChoice?: ToolChoice<ToolMap>,
   onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>
 ): StreamTextResult<ToolMap, never> {
-  const openai = createOpenAI({ apiKey });
+  const proxyFetch = getProxyFetch();
+  const openai = createOpenAI({ apiKey, fetch: proxyFetch });
   return streamText({
     model: openai(model),
     prompt,
@@ -217,7 +323,8 @@ function streamAnthropic(
   }
 
   const mappedModel = getAnthropicModel(model);
-  const anthropic = createAnthropic({ apiKey });
+  const proxyFetch = getProxyFetch();
+  const anthropic = createAnthropic({ apiKey, fetch: proxyFetch });
   return streamText({
     model: anthropic(mappedModel),
     prompt,
@@ -273,7 +380,8 @@ async function generateOpenAI(
   prompt?: string,
   maxSteps = 5
 ): Promise<GenerateTextResult<ToolMap, never>> {
-  const openai = createOpenAI({ apiKey });
+  const proxyFetch = getProxyFetch();
+  const openai = createOpenAI({ apiKey, fetch: proxyFetch });
   return await generateText({
     model: openai("gpt-4o-mini"),
     prompt,
@@ -292,9 +400,10 @@ async function generateAnthropic(
   prompt?: string,
   maxSteps = 5
 ): Promise<GenerateTextResult<ToolMap, never>> {
-  const anthropic = createAnthropic({ apiKey });
+  const proxyFetch = getProxyFetch();
+  const anthropic = createAnthropic({ apiKey, fetch: proxyFetch });
   return await generateText({
-    model: anthropic("claude-3-sonnet-20240229"),
+    model: anthropic("claude-haiku-4-5"),
     prompt,
     system,
     tools,

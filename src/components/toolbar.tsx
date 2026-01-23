@@ -331,11 +331,11 @@ export function AIFeaturesSettingsPage({
               settings={settings}
               onSettingsChange={setSettings}
             />
-            {/* <ConfigureProvider
+            <ConfigureProvider
               provider="Anthropic"
               settings={settings}
               onSettingsChange={setSettings}
-            /> */}
+            />
           </>
         )}
 

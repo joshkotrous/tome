@@ -1,6 +1,6 @@
 import * as monacoEditor from "monaco-editor";
 import { OnMount } from "@monaco-editor/react";
-import { DatabaseSchema } from "core/connections";
+import { DatabaseSchema, TableDef } from "core/connections";
 
 export interface TableInfo {
   name: string;
@@ -17,12 +17,276 @@ export interface SchemaCompletionProvider {
   currentConnection: any;
 }
 
+// Comprehensive SQL keywords
+const SQL_KEYWORDS = [
+  // DQL (Data Query Language)
+  "SELECT",
+  "FROM",
+  "WHERE",
+  "AS",
+  "DISTINCT",
+  "ALL",
+  // Joins
+  "JOIN",
+  "INNER JOIN",
+  "LEFT JOIN",
+  "LEFT OUTER JOIN",
+  "RIGHT JOIN",
+  "RIGHT OUTER JOIN",
+  "FULL JOIN",
+  "FULL OUTER JOIN",
+  "CROSS JOIN",
+  "NATURAL JOIN",
+  "ON",
+  "USING",
+  // Grouping & Ordering
+  "GROUP BY",
+  "HAVING",
+  "ORDER BY",
+  "ASC",
+  "DESC",
+  "NULLS FIRST",
+  "NULLS LAST",
+  // Limiting
+  "LIMIT",
+  "OFFSET",
+  "FETCH",
+  "FIRST",
+  "NEXT",
+  "ROWS",
+  "ONLY",
+  "TOP",
+  // Set operations
+  "UNION",
+  "UNION ALL",
+  "INTERSECT",
+  "EXCEPT",
+  "MINUS",
+  // Subqueries
+  "IN",
+  "NOT IN",
+  "EXISTS",
+  "NOT EXISTS",
+  "ANY",
+  "SOME",
+  // Conditions
+  "AND",
+  "OR",
+  "NOT",
+  "BETWEEN",
+  "LIKE",
+  "ILIKE",
+  "SIMILAR TO",
+  "IS NULL",
+  "IS NOT NULL",
+  "IS TRUE",
+  "IS FALSE",
+  "IS UNKNOWN",
+  // Case
+  "CASE",
+  "WHEN",
+  "THEN",
+  "ELSE",
+  "END",
+  // DML (Data Manipulation Language)
+  "INSERT",
+  "INSERT INTO",
+  "VALUES",
+  "UPDATE",
+  "SET",
+  "DELETE",
+  "DELETE FROM",
+  "TRUNCATE",
+  "MERGE",
+  "UPSERT",
+  "RETURNING",
+  // DDL (Data Definition Language)
+  "CREATE",
+  "CREATE TABLE",
+  "CREATE INDEX",
+  "CREATE VIEW",
+  "CREATE DATABASE",
+  "CREATE SCHEMA",
+  "ALTER",
+  "ALTER TABLE",
+  "DROP",
+  "DROP TABLE",
+  "DROP INDEX",
+  "DROP VIEW",
+  "RENAME",
+  "ADD",
+  "ADD COLUMN",
+  "DROP COLUMN",
+  "MODIFY",
+  // Constraints
+  "PRIMARY KEY",
+  "FOREIGN KEY",
+  "REFERENCES",
+  "UNIQUE",
+  "CHECK",
+  "DEFAULT",
+  "NOT NULL",
+  "NULL",
+  "CONSTRAINT",
+  "INDEX",
+  "CASCADE",
+  "RESTRICT",
+  "SET NULL",
+  "SET DEFAULT",
+  "NO ACTION",
+  // Transactions
+  "BEGIN",
+  "COMMIT",
+  "ROLLBACK",
+  "SAVEPOINT",
+  "TRANSACTION",
+  // Common Table Expressions
+  "WITH",
+  "RECURSIVE",
+  // Window functions
+  "OVER",
+  "PARTITION BY",
+  "ROW_NUMBER",
+  "RANK",
+  "DENSE_RANK",
+  "NTILE",
+  "LAG",
+  "LEAD",
+  "FIRST_VALUE",
+  "LAST_VALUE",
+  "NTH_VALUE",
+  // Aggregate functions
+  "COUNT",
+  "SUM",
+  "AVG",
+  "MIN",
+  "MAX",
+  "ARRAY_AGG",
+  "STRING_AGG",
+  "JSON_AGG",
+  "JSONB_AGG",
+  "COALESCE",
+  "NULLIF",
+  "GREATEST",
+  "LEAST",
+  // Data types
+  "INT",
+  "INTEGER",
+  "BIGINT",
+  "SMALLINT",
+  "DECIMAL",
+  "NUMERIC",
+  "FLOAT",
+  "REAL",
+  "DOUBLE PRECISION",
+  "VARCHAR",
+  "CHAR",
+  "TEXT",
+  "BOOLEAN",
+  "DATE",
+  "TIME",
+  "TIMESTAMP",
+  "TIMESTAMPTZ",
+  "INTERVAL",
+  "UUID",
+  "JSON",
+  "JSONB",
+  "ARRAY",
+  "SERIAL",
+  "BIGSERIAL",
+];
+
+// SQL functions
+const SQL_FUNCTIONS = [
+  // String functions
+  "CONCAT",
+  "SUBSTRING",
+  "LENGTH",
+  "CHAR_LENGTH",
+  "UPPER",
+  "LOWER",
+  "TRIM",
+  "LTRIM",
+  "RTRIM",
+  "REPLACE",
+  "REVERSE",
+  "LEFT",
+  "RIGHT",
+  "LPAD",
+  "RPAD",
+  "SPLIT_PART",
+  "POSITION",
+  "STRPOS",
+  "INITCAP",
+  "REPEAT",
+  "FORMAT",
+  // Numeric functions
+  "ABS",
+  "CEIL",
+  "CEILING",
+  "FLOOR",
+  "ROUND",
+  "TRUNC",
+  "MOD",
+  "POWER",
+  "SQRT",
+  "RANDOM",
+  "SIGN",
+  "LOG",
+  "LN",
+  "EXP",
+  // Date/Time functions
+  "NOW",
+  "CURRENT_DATE",
+  "CURRENT_TIME",
+  "CURRENT_TIMESTAMP",
+  "DATE_TRUNC",
+  "DATE_PART",
+  "EXTRACT",
+  "AGE",
+  "DATE_ADD",
+  "DATE_SUB",
+  "DATEDIFF",
+  "TO_CHAR",
+  "TO_DATE",
+  "TO_TIMESTAMP",
+  // Conditional functions
+  "COALESCE",
+  "NULLIF",
+  "GREATEST",
+  "LEAST",
+  "CASE",
+  "IF",
+  "IIF",
+  "NVL",
+  "NVL2",
+  "DECODE",
+  // Type conversion
+  "CAST",
+  "CONVERT",
+  "TO_NUMBER",
+  "TO_TEXT",
+  // JSON functions
+  "JSON_EXTRACT",
+  "JSON_OBJECT",
+  "JSON_ARRAY",
+  "JSONB_EXTRACT_PATH",
+  "JSONB_SET",
+  // Array functions
+  "ARRAY_LENGTH",
+  "ARRAY_APPEND",
+  "ARRAY_CAT",
+  "UNNEST",
+  "ANY",
+  "ALL",
+];
+
 export function createSchemaCompletionProvider(
   schema: DatabaseSchema | null,
   currentConnection: any
 ): monacoEditor.languages.CompletionItemProvider {
   return {
-    triggerCharacters: [" ", ".", "\n", "\t"],
+    triggerCharacters: [" ", ".", "\n", "\t", ",", "("],
 
     provideCompletionItems: (model, position) => {
       const word = model.getWordUntilPosition(position);
@@ -37,70 +301,71 @@ export function createSchemaCompletionProvider(
       };
 
       const suggestions: monacoEditor.languages.CompletionItem[] = [];
+      const addedLabels = new Set<string>();
+
+      // Helper to avoid duplicates
+      const addSuggestion = (
+        suggestion: monacoEditor.languages.CompletionItem
+      ) => {
+        const key = `${suggestion.label}-${suggestion.kind}`;
+        if (!addedLabels.has(key)) {
+          addedLabels.add(key);
+          suggestions.push(suggestion);
+        }
+      };
 
       // Add SQL keywords
-      const sqlKeywords = [
-        "SELECT",
-        "FROM",
-        "WHERE",
-        "JOIN",
-        "INNER JOIN",
-        "LEFT JOIN",
-        "RIGHT JOIN",
-        "ORDER BY",
-        "GROUP BY",
-        "HAVING",
-        "INSERT",
-        "UPDATE",
-        "DELETE",
-        "CREATE",
-        "ALTER",
-        "DROP",
-        "INDEX",
-        "PRIMARY KEY",
-        "FOREIGN KEY",
-        "REFERENCES",
-        "AND",
-        "OR",
-        "NOT",
-        "IN",
-        "EXISTS",
-        "BETWEEN",
-        "LIKE",
-        "IS NULL",
-        "IS NOT NULL",
-        "COUNT",
-        "SUM",
-        "AVG",
-        "MIN",
-        "MAX",
-        "DISTINCT",
-        "AS",
-        "LIMIT",
-        "OFFSET",
-      ];
-
-      sqlKeywords.forEach((keyword) => {
-        suggestions.push({
+      SQL_KEYWORDS.forEach((keyword) => {
+        addSuggestion({
           label: keyword,
           kind: monacoEditor.languages.CompletionItemKind.Keyword,
-          insertText: keyword,
+          insertText: keyword + " ",
           range,
-          sortText: `0_${keyword}`, // Prioritize keywords
+          sortText: `0_${keyword.toLowerCase()}`,
         });
       });
 
-      if (!schema?.schemas?.[0]?.tables) {
+      // Add SQL functions
+      SQL_FUNCTIONS.forEach((func) => {
+        addSuggestion({
+          label: func,
+          kind: monacoEditor.languages.CompletionItemKind.Function,
+          insertText: func + "(",
+          range,
+          detail: "Function",
+          sortText: `1_${func.toLowerCase()}`,
+        });
+      });
+
+      // Collect all tables from all schemas
+      const allTables: Array<{ schemaName: string; table: TableDef }> = [];
+      if (schema?.schemas) {
+        schema.schemas.forEach((schemaInfo) => {
+          schemaInfo.tables.forEach((table) => {
+            allTables.push({ schemaName: schemaInfo.name, table });
+          });
+        });
+      }
+
+      if (allTables.length === 0) {
         return { suggestions };
       }
 
-      const tables = schema.schemas[0].tables;
-      const isPostgres = currentConnection?.engine === "postgresql";
+      const isPostgres =
+        currentConnection?.engine === "postgresql" ||
+        currentConnection?.engine === "Postgres";
+      const isMySql =
+        currentConnection?.engine === "mysql" ||
+        currentConnection?.engine === "MySQL";
 
-      // Helper function to quote identifiers for PostgreSQL if needed
+      // Helper function to quote identifiers if needed
       const quoteIdentifier = (name: string): string => {
+        // Quote if contains special characters or uppercase (for Postgres)
         if (isPostgres && /[A-Z]/.test(name)) {
           return `"${name}"`;
+        }
+        if (isMySql && /[^a-zA-Z0-9_]/.test(name)) {
+          return `\`${name}\``;
         }
         return name;
       };
@@ -108,142 +373,179 @@ export function createSchemaCompletionProvider(
       // Check context to determine what to suggest
       const lowerLine = lineUpToPosition.toLowerCase();
 
-      // After FROM, JOIN, UPDATE, DELETE FROM, INSERT INTO - suggest tables
-      if (
-        /\b(from|join|update|delete\s+from|insert\s+into)\s+$/i.test(
-          lineUpToPosition
-        )
-      ) {
-        tables.forEach((table) => {
+      // After FROM, JOIN, UPDATE, DELETE FROM, INSERT INTO, INTO - suggest tables
+      const afterTableKeyword =
+        /\b(from|join|update|into|table)\s+$/i.test(lineUpToPosition) ||
+        /\bdelete\s+from\s+$/i.test(lineUpToPosition) ||
+        /\binsert\s+into\s+$/i.test(lineUpToPosition);
+
+      if (afterTableKeyword) {
+        allTables.forEach(({ schemaName, table }) => {
           const quotedTableName = quoteIdentifier(table.table);
-          suggestions.push({
+          const fullTableName =
+            schemaName && schemaName !== "public" && schemaName !== "main"
+              ? `${quoteIdentifier(schemaName)}.${quotedTableName}`
+              : quotedTableName;
+
+          addSuggestion({
             label: table.table,
             kind: monacoEditor.languages.CompletionItemKind.Class,
-            insertText: quotedTableName,
+            insertText: fullTableName,
             range,
-            detail: `Table with ${table.columns.length} columns`,
-            documentation: `Columns: ${table.columns
-              .map((c) => c.name)
-              .join(", ")}`,
-            sortText: `1_${table.table}`,
+            detail: `Table (${table.columns.length} columns)${schemaName ? ` in ${schemaName}` : ""}`,
+            documentation: {
+              value: `**Columns:**\n${table.columns.map((c) => `- \`${c.name}\` ${c.type}${c.nullable ? "" : " NOT NULL"}`).join("\n")}`,
+            },
+            sortText: `2_${table.table.toLowerCase()}`,
           });
         });
+        return { suggestions };
       }
 
-      // After SELECT, or after comma in SELECT - suggest columns and table.column
-      if (/\bselect\s+/i.test(lowerLine) || /,\s*$/i.test(lineUpToPosition)) {
-        // Add all columns from all tables (unqualified)
-        tables.forEach((table) => {
-          table.columns.forEach((column) => {
-            const quotedColumnName = quoteIdentifier(column.name);
-            suggestions.push({
-              label: column.name,
-              kind: monacoEditor.languages.CompletionItemKind.Field,
-              insertText: quotedColumnName,
-              range,
-              detail: `${column.type}${
-                column.nullable ? " (nullable)" : " (not null)"
-              }`,
-              documentation: `Column from table ${table.table}`,
-              sortText: `2_${column.name}`,
-            });
-          });
-        });
-
-        // Add qualified column names (table.column)
-        tables.forEach((table) => {
-          table.columns.forEach((column) => {
-            const quotedTableName = quoteIdentifier(table.table);
-            const quotedColumnName = quoteIdentifier(column.name);
-            const qualifiedName = `${quotedTableName}.${quotedColumnName}`;
-
-            suggestions.push({
-              label: `${table.table}.${column.name}`,
-              kind: monacoEditor.languages.CompletionItemKind.Field,
-              insertText: qualifiedName,
-              range,
-              detail: `${column.type}${
-                column.nullable ? " (nullable)" : " (not null)"
-              }`,
-              documentation: `${table.table}.${column.name}`,
-              sortText: `3_${table.table}_${column.name}`,
-            });
-          });
-        });
-      }
-
-      // Table name followed by dot - suggest columns for that table
-      const tableColumnMatch = lineUpToPosition.match(/(\w+)\.$/);
+      // Table name or alias followed by dot - suggest columns for that table
+      const tableColumnMatch = lineUpToPosition.match(
+        /(?:^|[\s,])(\w+)\.$/i
+      );
       if (tableColumnMatch) {
-        const tableName = tableColumnMatch[1];
-        const table = tables.find(
-          (t) =>
-            t.table.toLowerCase() === tableName.toLowerCase() ||
-            quoteIdentifier(t.table).toLowerCase() === tableName.toLowerCase()
+        const tableNameOrAlias = tableColumnMatch[1].toLowerCase();
+
+        // Find matching table
+        const matchingTable = allTables.find(
+          ({ table }) => table.table.toLowerCase() === tableNameOrAlias
         );
 
-        if (table) {
-          table.columns.forEach((column) => {
+        if (matchingTable) {
+          // Clear other suggestions for cleaner context-specific completions
+          suggestions.length = 0;
+          addedLabels.clear();
+
+          // Add * for selecting all columns
+          addSuggestion({
+            label: "*",
+            kind: monacoEditor.languages.CompletionItemKind.Constant,
+            insertText: "*",
+            range,
+            detail: "All columns",
+            sortText: "0_*",
+          });
+
+          matchingTable.table.columns.forEach((column) => {
             const quotedColumnName = quoteIdentifier(column.name);
-            suggestions.push({
+            addSuggestion({
               label: column.name,
               kind: monacoEditor.languages.CompletionItemKind.Field,
               insertText: quotedColumnName,
               range,
-              detail: `${column.type}${
-                column.nullable ? " (nullable)" : " (not null)"
-              }`,
-              documentation: `Column from table ${table.table}`,
-              sortText: `1_${column.name}`,
+              detail: `${column.type}${column.nullable ? " (nullable)" : " NOT NULL"}`,
+              documentation: `Column from table ${matchingTable.table.table}`,
+              sortText: `1_${column.name.toLowerCase()}`,
             });
           });
+          return { suggestions };
         }
       }
 
-      // After WHERE, HAVING, ON - suggest columns and table.column
-      if (/\b(where|having|on)\s+/i.test(lowerLine)) {
-        tables.forEach((table) => {
+      // After SELECT, or after comma - suggest columns and table.column
+      const inSelectClause =
+        /\bselect\s+/i.test(lowerLine) && !/\bfrom\b/i.test(lowerLine);
+      const afterComma = /,\s*$/i.test(lineUpToPosition);
+
+      if (inSelectClause || afterComma) {
+        // Add * for selecting all
+        addSuggestion({
+          label: "*",
+          kind: monacoEditor.languages.CompletionItemKind.Constant,
+          insertText: "*",
+          range,
+          detail: "All columns",
+          sortText: "2_*",
+        });
+
+        // Add all columns from all tables
+        allTables.forEach(({ table }) => {
           table.columns.forEach((column) => {
             const quotedColumnName = quoteIdentifier(column.name);
-            const quotedTableName = quoteIdentifier(table.table);
-
-            // Unqualified column
-            suggestions.push({
+            addSuggestion({
               label: column.name,
               kind: monacoEditor.languages.CompletionItemKind.Field,
               insertText: quotedColumnName,
               range,
-              detail: `${column.type} from ${table.table}`,
-              sortText: `2_${column.name}`,
+              detail: `${column.type} (${table.table})`,
+              sortText: `3_${column.name.toLowerCase()}`,
             });
+          });
 
-            // Qualified column
-            suggestions.push({
+          // Add qualified column names (table.column)
+          const quotedTableName = quoteIdentifier(table.table);
+          table.columns.forEach((column) => {
+            const quotedColumnName = quoteIdentifier(column.name);
+            addSuggestion({
               label: `${table.table}.${column.name}`,
               kind: monacoEditor.languages.CompletionItemKind.Field,
               insertText: `${quotedTableName}.${quotedColumnName}`,
               range,
-              detail: `${column.type}`,
-              sortText: `3_${table.table}_${column.name}`,
+              detail: column.type,
+              sortText: `4_${table.table.toLowerCase()}_${column.name.toLowerCase()}`,
             });
           });
         });
       }
 
-      // Suggest table names for general context
-      tables.forEach((table) => {
+      // After WHERE, HAVING, ON, AND, OR, SET - suggest columns
+      const inConditionClause =
+        /\b(where|having|on|and|or|set)\s+/i.test(lowerLine) ||
+        /\b(where|having|on|and|or|set)\s+\w+\s*(=|<|>|!=|<>|<=|>=|like|ilike|in|between)\s*$/i.test(
+          lowerLine
+        );
+
+      if (inConditionClause) {
+        allTables.forEach(({ table }) => {
+          const quotedTableName = quoteIdentifier(table.table);
+          table.columns.forEach((column) => {
+            const quotedColumnName = quoteIdentifier(column.name);
+
+            // Unqualified column
+            addSuggestion({
+              label: column.name,
+              kind: monacoEditor.languages.CompletionItemKind.Field,
+              insertText: quotedColumnName,
+              range,
+              detail: `${column.type} (${table.table})`,
+              sortText: `3_${column.name.toLowerCase()}`,
+            });
+
+            // Qualified column
+            addSuggestion({
+              label: `${table.table}.${column.name}`,
+              kind: monacoEditor.languages.CompletionItemKind.Field,
+              insertText: `${quotedTableName}.${quotedColumnName}`,
+              range,
+              detail: column.type,
+              sortText: `4_${table.table.toLowerCase()}_${column.name.toLowerCase()}`,
+            });
+          });
+        });
+      }
+
+      // Always suggest table names as fallback
+      allTables.forEach(({ table }) => {
         const quotedTableName = quoteIdentifier(table.table);
-        suggestions.push({
+        addSuggestion({
           label: table.table,
           kind: monacoEditor.languages.CompletionItemKind.Class,
           insertText: quotedTableName,
           range,
-          detail: `Table with ${table.columns.length} columns`,
-          documentation: `Columns: ${table.columns
-            .slice(0, 5)
-            .map((c) => c.name)
-            .join(", ")}${table.columns.length > 5 ? "..." : ""}`,
-          sortText: `4_${table.table}`,
+          detail: `Table (${table.columns.length} columns)`,
+          documentation: {
+            value:
+              table.columns.length <= 10
+                ? `**Columns:** ${table.columns.map((c) => c.name).join(", ")}`
+                : `**Columns:** ${table.columns
+                    .slice(0, 10)
+                    .map((c) => c.name)
+                    .join(", ")}... (+${table.columns.length - 10} more)`,
+          },
+          sortText: `5_${table.table.toLowerCase()}`,
         });
       });
 
