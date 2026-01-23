@@ -43,9 +43,35 @@ export const SettingsObject = z.object({
       openai: z.object({ enabled: z.boolean(), apiKey: z.string() }),
     }),
   }),
+  autoUpdates: z.boolean().optional().default(true),
 });
 
 export type Settings = z.infer<typeof SettingsObject>;
+
+export type UpdateStatus =
+  | "checking"
+  | "available"
+  | "not-available"
+  | "downloading"
+  | "downloaded"
+  | "error";
+
+export type UpdateInfo = {
+  status: UpdateStatus;
+  currentVersion: string;
+  latestVersion?: string;
+  releaseNotes?: string;
+  releaseName?: string;
+  releaseDate?: string;
+  error?: string;
+};
+
+export type DownloadProgress = {
+  bytesPerSecond: number;
+  percent: number;
+  transferred: number;
+  total: number;
+};
 
 export type Conversation = {
   id: number;

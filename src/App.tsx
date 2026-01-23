@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppDataProvider, useAppData } from "./applicationDataProvider";
 import BottomBar from "./components/bottomBar";
 import QueryInterface from "./components/editor";
@@ -13,6 +13,7 @@ import { AddConnectionForm } from "./components/addDatabaseButton";
 import TomeLogo from "./components/logos/tome";
 import { Toaster } from "./components/ui/sonner";
 import { ThemeProvider } from "./themeProvider";
+import { toast } from "sonner";
 
 function App() {
   useEffect(() => {
@@ -35,7 +36,7 @@ Contribute at https://github.com/joshkotrous/tome`);
         <QueryDataProvider>
           <TooltipProvider>
             <Toaster />
-
+            <UpdateChecker />
             <SetupWindow />
             <div className="w-full h-full bg-zinc-950 flex flex-col dark overflow-hidden">
               <Toolbar />
@@ -52,6 +53,113 @@ Contribute at https://github.com/joshkotrous/tome`);
       </AppDataProvider>
     </ThemeProvider>
   );
+}
+
+function UpdateChecker() {
+  const { settings } = useAppData();
+  const [hasChecked, setHasChecked] = useState(false);
+  const [downloadToastId, setDownloadToastId] = useState<string | number | null>(null);
+
+  // Listen for download progress updates
+  useEffect(() => {
+    const unsubscribeProgress = window.updates.onDownloadProgress((progress) => {
+      if (downloadToastId) {
+        toast.loading(
+          `Downloading update... ${progress.percent.toFixed(0)}%`,
+          {
+            id: downloadToastId,
+            description: `${(progress.transferred / 1024 / 1024).toFixed(1)} MB / ${(progress.total / 1024 / 1024).toFixed(1)} MB`,
+          }
+        );
+      }
+    });
+
+    const unsubscribeStatus = window.updates.onUpdateStatus((data) => {
+      if (data.status === "downloaded") {
+        if (downloadToastId) {
+          toast.dismiss(downloadToastId);
+        }
+        toast.success(`Update v${data.latestVersion} ready to install!`, {
+          description: "The update will be installed when you restart the app.",
+          duration: 0, // Persist until dismissed
+          action: {
+            label: "Restart Now",
+            onClick: async () => {
+              await window.updates.installUpdate();
+            },
+          },
+        });
+      } else if (data.status === "error") {
+        if (downloadToastId) {
+          toast.dismiss(downloadToastId);
+        }
+        toast.error("Update failed", {
+          description: data.error || "An error occurred while updating",
+          duration: 5000,
+        });
+      }
+    });
+
+    return () => {
+      unsubscribeProgress();
+      unsubscribeStatus();
+    };
+  }, [downloadToastId]);
+
+  const checkForUpdates = useCallback(async () => {
+    if (hasChecked || !settings) return;
+    setHasChecked(true);
+
+    try {
+      const updateInfo = await window.updates.checkForUpdates();
+
+      if (updateInfo.status !== "available") return;
+
+      const autoUpdatesEnabled = settings.autoUpdates ?? true;
+
+      if (autoUpdatesEnabled) {
+        // Auto-update enabled: automatically start download
+        const toastId = toast.loading(
+          `Downloading update v${updateInfo.latestVersion}...`,
+          {
+            description: "Starting download...",
+          }
+        );
+        setDownloadToastId(toastId);
+        await window.updates.downloadUpdate();
+      } else {
+        // Auto-update disabled: show toast with option to download
+        toast.info(`Update v${updateInfo.latestVersion} available!`, {
+          description: `You're currently on v${updateInfo.currentVersion}`,
+          duration: 10000,
+          action: {
+            label: "Download Update",
+            onClick: async () => {
+              const toastId = toast.loading(
+                `Downloading update v${updateInfo.latestVersion}...`,
+                {
+                  description: "Starting download...",
+                }
+              );
+              setDownloadToastId(toastId);
+              await window.updates.downloadUpdate();
+            },
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Failed to check for updates:", error);
+    }
+  }, [settings, hasChecked]);
+
+  useEffect(() => {
+    // Only check for updates after settings are loaded and setup is complete
+    if (settings?.setupComplete) {
+      checkForUpdates();
+    }
+  }, [settings, checkForUpdates]);
+
+  return null;
 }
 
 function SetupWindow() {

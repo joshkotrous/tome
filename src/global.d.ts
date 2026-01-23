@@ -12,6 +12,8 @@ import {
   ConnectionSchema,
   Column,
   Table,
+  UpdateInfo,
+  DownloadProgress,
 } from "./types";
 
 export {};
@@ -108,6 +110,16 @@ interface SchemasApi {
   updateSchema: (id: number, values: Partial<Schema>) => Promise<Schema>;
 }
 
+interface UpdatesApi {
+  checkForUpdates: () => Promise<UpdateInfo>;
+  downloadUpdate: () => Promise<void>;
+  installUpdate: () => Promise<void>;
+  getCurrentVersion: () => Promise<string>;
+  getUpdateAvailable: () => Promise<boolean>;
+  onUpdateStatus: (callback: (data: UpdateInfo) => void) => () => void;
+  onDownloadProgress: (callback: (data: DownloadProgress) => void) => () => void;
+}
+
 declare global {
   interface Window {
     connections: ConnectionsApi;
@@ -120,5 +132,6 @@ declare global {
     columns: ColumnsApi;
     tables: TablesApi;
     schemas: SchemasApi;
+    updates: UpdatesApi;
   }
 }
