@@ -32,7 +32,7 @@ import {
 import AnimatedEllipsis from "./animatedEllipsis";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { useAppData } from "@/applicationDataProvider";
-import { TomeAgentModel, TomeAgentModels } from "../../core/ai";
+import { TomeAgentModel, TomeAgentModels, getLocalModels } from "../../core/ai";
 import { useQueryData } from "@/queryDataProvider";
 import { AIProviderLogo } from "./toolbar";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -756,24 +756,26 @@ function ModelPicker({
     if (!settings) return [];
 
     const { openai, anthropic } = settings.aiFeatures.providers;
+    const localModel = settings.aiFeatures.localModel;
 
-    // If both providers are enabled, show all models
-    if (openai.enabled && anthropic.enabled) {
-      return TomeAgentModels;
+    let models: TomeAgentModel[] = [];
+
+    // Add OpenAI models if enabled
+    if (openai.enabled) {
+      models = [...models, ...TomeAgentModels.filter((model) => model.provider === "Open AI")];
     }
 
-    // If only OpenAI is enabled, show OpenAI models
-    if (openai.enabled && !anthropic.enabled) {
-      return TomeAgentModels.filter((model) => model.provider === "Open AI");
+    // Add Anthropic models if enabled
+    if (anthropic.enabled) {
+      models = [...models, ...TomeAgentModels.filter((model) => model.provider === "Anthropic")];
     }
 
-    // If only Anthropic is enabled, show Anthropic models
-    if (!openai.enabled && anthropic.enabled) {
-      return TomeAgentModels.filter((model) => model.provider === "Anthropic");
+    // Add local models if configured
+    if (localModel?.url && localModel.models.length > 0) {
+      models = [...models, ...getLocalModels(localModel)];
     }
 
-    // If neither provider is enabled, return empty array
-    return [];
+    return models;
   };
 
   const availableModels = getAvailableModels();
@@ -824,7 +826,9 @@ function ModelPicker({
     <Select
       value={model.name}
       onValueChange={(val: string) => {
-        const selectedModel = TomeAgentModels.find((i) => i.name === val);
+        // First check static models, then check available models (which includes local)
+        const selectedModel = TomeAgentModels.find((i) => i.name === val) 
+          ?? availableModels.find((i) => i.name === val);
         if (selectedModel) {
           onModelChange(selectedModel);
         }

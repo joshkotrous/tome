@@ -3,10 +3,13 @@ import {
   FileCode,
   Loader2,
   LucideProps,
+  Plus,
   RefreshCw,
   Search,
+  Server,
   Settings,
   Sparkles,
+  Trash2,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -345,6 +348,10 @@ export function AIFeaturesSettingsPage({
               settings={settings}
               onSettingsChange={setSettings}
             />
+            <ConfigureLocalModel
+              settings={settings}
+              onSettingsChange={setSettings}
+            />
           </>
         )}
 
@@ -632,6 +639,128 @@ function ConfigureProvider({
   );
 }
 
+function ConfigureLocalModel({
+  settings,
+  onSettingsChange,
+}: {
+  settings: SettingsType;
+  onSettingsChange: (settings: SettingsType) => void;
+}) {
+  const [newModelId, setNewModelId] = useState("");
+  const localModel = settings.aiFeatures.localModel ?? { url: "", models: [] };
+
+  const handleUrlChange = (url: string) => {
+    onSettingsChange({
+      ...settings,
+      aiFeatures: {
+        ...settings.aiFeatures,
+        localModel: {
+          ...localModel,
+          url,
+        },
+      },
+    });
+  };
+
+  const handleAddModel = () => {
+    if (!newModelId.trim()) return;
+    if (localModel.models.includes(newModelId.trim())) return;
+
+    onSettingsChange({
+      ...settings,
+      aiFeatures: {
+        ...settings.aiFeatures,
+        localModel: {
+          ...localModel,
+          models: [...localModel.models, newModelId.trim()],
+        },
+      },
+    });
+    setNewModelId("");
+  };
+
+  const handleRemoveModel = (modelId: string) => {
+    onSettingsChange({
+      ...settings,
+      aiFeatures: {
+        ...settings.aiFeatures,
+        localModel: {
+          ...localModel,
+          models: localModel.models.filter((m) => m !== modelId),
+        },
+      },
+    });
+  };
+
+  return (
+    <div className="bg-zinc-900 p-4 px-4 space-y-3 rounded-md transition-all">
+      <div className="flex items-center gap-2">
+        <Server className="size-5 text-zinc-400" />
+        <span>Local Model</span>
+      </div>
+
+      <div>
+        <p className="text-zinc-400 text-xs ml-1 py-2">
+          Host URL (e.g., http://localhost:11434/v1)
+        </p>
+        <Input
+          type="text"
+          placeholder="Enter local model host URL..."
+          value={localModel.url}
+          onChange={(e) => handleUrlChange(e.target.value)}
+        />
+      </div>
+
+      <div>
+        <p className="text-zinc-400 text-xs ml-1 py-2">Model IDs</p>
+        <div className="flex gap-2">
+          <Input
+            type="text"
+            placeholder="Enter model ID (e.g., llama3.2)"
+            value={newModelId}
+            onChange={(e) => setNewModelId(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddModel();
+              }
+            }}
+          />
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={handleAddModel}
+            disabled={!newModelId.trim()}
+          >
+            <Plus className="size-4" />
+          </Button>
+        </div>
+
+        {localModel.models.length > 0 && (
+          <div className="mt-2 space-y-1">
+            {localModel.models.map((modelId) => (
+              <div
+                key={modelId}
+                className="flex items-center justify-between bg-zinc-800 px-3 py-2 rounded-md text-sm"
+              >
+                <span className="font-mono text-zinc-300">{modelId}</span>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => handleRemoveModel(modelId)}
+                  className="h-6 w-6 p-0 hover:bg-zinc-700"
+                >
+                  <Trash2 className="size-3 text-zinc-400" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function AIProviderLogo({
   provider,
   className,
@@ -644,6 +773,8 @@ export function AIProviderLogo({
       return <OpenAILogo className={className} />;
     case "Anthropic":
       return <AnthropicLogo className={className} />;
+    case "Local":
+      return <Server className={className} />;
     default:
       return null;
   }

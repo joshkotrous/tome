@@ -313,11 +313,18 @@ export function useAgent({
             .replace("{{FULL_SCHEMA}}", JSON.stringify(schema))
         : AGENT_MODE_PROMPT.replace("{{DATABASES}}", JSON.stringify(databases));
 
+    const getApiKey = () => {
+      if (model.provider === "Open AI") {
+        return settings.aiFeatures.providers.openai.apiKey;
+      } else if (model.provider === "Anthropic") {
+        return settings.aiFeatures.providers.anthropic.apiKey;
+      }
+      // Local models don't need an API key
+      return "";
+    };
+
     const streamResult = streamResponse({
-      apiKey:
-        model.provider === "Open AI"
-          ? settings.aiFeatures.providers.openai.apiKey
-          : settings.aiFeatures.providers.anthropic.apiKey,
+      apiKey: getApiKey(),
       model: model.name,
       toolCallStreaming: true,
       provider: model.provider,
@@ -325,6 +332,7 @@ export function useAgent({
       maxSteps: 10,
       messages: messagesToUse,
       system: systemPrompt,
+      localModel: settings.aiFeatures.localModel,
       onStepFinish: ({ toolCalls, toolResults }) => {
         
         // Update messages with tool results and metadata

@@ -20,6 +20,10 @@ const defaultSettings: Settings = {
         apiKey: "",
       },
     },
+    localModel: {
+      url: "",
+      models: [],
+    },
   },
   autoUpdates: true,
 };
