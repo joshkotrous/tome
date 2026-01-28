@@ -173,6 +173,9 @@ export function useAgent({
   
   // Map to track toolCallId -> database message ID for updating
   const toolCallToDbIdRef = useRef<Map<string, string>>(new Map());
+  
+  // AbortController for stopping the AI stream
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Update messages when initialMessages changes (e.g., when switching queries)
   useEffect(() => {
@@ -323,7 +326,12 @@ export function useAgent({
       return "";
     };
 
+    // Create a new AbortController for this stream
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     const streamResult = streamResponse({
+      abortSignal: abortController.signal,
       apiKey: getApiKey(),
       model: model.name,
       toolCallStreaming: true,
@@ -588,8 +596,13 @@ export function useAgent({
 
     await streamResult
       .consumeStream()
-      .catch()
-      .finally(() => setThinking(false));
+      .catch(() => {
+        // Ignore abort errors
+      })
+      .finally(() => {
+        abortControllerRef.current = null;
+        setThinking(false);
+      });
   }
 
   async function approveQuery() {
@@ -615,6 +628,14 @@ export function useAgent({
     await runAgentWithMessages(messages);
   }
 
+  function stopGeneration() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setThinking(false);
+    }
+  }
+
   return {
     messages,
     sendMessage,
@@ -623,5 +644,6 @@ export function useAgent({
     refreshResponse,
     permissionNeeded,
     setPermissionNeeded,
+    stopGeneration,
   };
 }

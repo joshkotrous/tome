@@ -82,7 +82,7 @@ export default function QueryInterface() {
 }
 
 export function SqlEditor() {
-  const { queries, currentQuery, runQuery, updateQuery, currentConnection } =
+  const { queries, currentQuery, runQuery, updateQuery, currentConnection, createQuery } =
     useQueryData();
   const [schema, setSchema] = useState<ConnectionSchema | null>(null);
   const [queryContent, setQueryContent] = useState("");
@@ -93,6 +93,26 @@ export function SqlEditor() {
   const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(
     null
   );
+
+  // Handle Cmd+N / Ctrl+N for new query
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+        e.preventDefault();
+        if (currentConnection) {
+          createQuery({
+            connection: currentConnection.id,
+            createdAt: new Date(),
+            query: "",
+            title: "untitled",
+          });
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [currentConnection, createQuery]);
 
   // Simplified handleChange function
   const handleChange = useCallback(
@@ -380,6 +400,7 @@ function EditorAgent({
     approveQuery,
     permissionNeeded,
     setPermissionNeeded,
+    stopGeneration,
   } = useAgent({
     currentConnection: currentConnection ?? undefined,
     currentQuery: currentQuery ?? undefined,
@@ -451,6 +472,7 @@ function EditorAgent({
             setInput={setInput}
             setModel={setModel}
             sendMessage={handleSendMessage}
+            onStop={stopGeneration}
           />
         </div>
       )}
@@ -619,7 +641,7 @@ function QueryTabs() {
             </Button>
           </div>
         </TooltipTrigger>
-        <TooltipContent>New query</TooltipContent>
+        <TooltipContent>New query (⌘N)</TooltipContent>
       </Tooltip>
     </div>
   );

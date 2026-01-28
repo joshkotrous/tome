@@ -9,11 +9,19 @@ import {
   MessageCirclePlus,
   Plus,
   SidebarClose,
+  Square,
   Trash,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import {
+  SetStateAction,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { cn, displayDate } from "@/lib/utils";
 import Spinner from "./ui/spinner";
 import MarkdownRenderer, { TomeSyntaxHighlighter } from "./markdownRederer";
@@ -87,7 +95,7 @@ export default function ChatInterface() {
 
   const [input, setInput] = useState("");
 
-  const { messages, thinking, sendMessage, permissionNeeded, approveQuery } =
+  const { messages, thinking, sendMessage, permissionNeeded, approveQuery, stopGeneration } =
     useAgent({
       initialMessages: currentMessages,
       model,
@@ -107,23 +115,74 @@ export default function ChatInterface() {
     await sendMessage(msg);
   }
 
+  const getWelcomeMessage = useCallback(() => {
+    const hour = new Date().getHours();
+
+    const morningMessages = [
+      "Good morning! What can I help you with today?",
+      "Rise and shine! Ready to explore your data?",
+      "Good morning! Let's dive into your databases.",
+    ];
+
+    const afternoonMessages = [
+      "Good afternoon! What can I help you with?",
+      "Hope your day is going well! Need help with your data?",
+      "Good afternoon! Ready to run some queries?",
+    ];
+
+    const eveningMessages = [
+      "Good evening! What can I help you with?",
+      "Evening! Let's make sense of your data.",
+      "Good evening! What would you like to explore?",
+    ];
+
+    const nightMessages = [
+      "Working late? Let's get your data questions answered.",
+      "Burning the midnight oil? I'm here to help.",
+      "Late night data session? Let's do this.",
+    ];
+
+    let messages: string[];
+    if (hour >= 5 && hour < 12) {
+      messages = morningMessages;
+    } else if (hour >= 12 && hour < 17) {
+      messages = afternoonMessages;
+    } else if (hour >= 17 && hour < 21) {
+      messages = eveningMessages;
+    } else {
+      messages = nightMessages;
+    }
+
+    // Pick a consistent message based on the current date (changes daily, not every render)
+    const dayOfYear = Math.floor(
+      (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) /
+        (1000 * 60 * 60 * 24),
+    );
+    return messages[dayOfYear % messages.length];
+  }, []);
+
+  const welcomeMessage = useMemo(() => getWelcomeMessage(), [getWelcomeMessage]);
+
   const suggestions = [
     {
       name: "Run query",
-      message: "Run a query of your choice against any table or database",
+      message:
+        "Run a query of your choice against any table or database to show me something interesting.",
     },
     {
       name: "Visualize Data",
-      message: "Run a query of your choice against any table or database",
+      message:
+        "Pick some data of your choice and create a visualization that reveals interesting patterns or insights.",
     },
     {
       name: "Analyze Data",
-      message: "Run a query of your choice against any table or database",
+      message:
+        "Analyze a table of your choice and provide insights about the data you find.",
     },
     {
       name: "Ask a question",
       message:
-        "Come up with a question I could ask you about my data and follow with an answer",
+        "Come up with an interesting question about my data and answer it with a query.",
     },
   ];
 
@@ -147,12 +206,13 @@ export default function ChatInterface() {
           model={model}
           setModel={setModel}
           sendMessage={send}
+          onStop={stopGeneration}
         />
       )}
       {!selectedConversation && (
         <div className="flex  flex-col flex-1 w-full  px-8 items-center justify-center">
           <h2 className="text-center font-bold text-2xl  select-none">
-            What can I help you with today?
+            {welcomeMessage}
           </h2>
           <div className="flex justify-center flex-wrap py-2 gap-1.5 ">
             {suggestions.map((i) => (
@@ -176,6 +236,8 @@ export default function ChatInterface() {
             input={input}
             setInput={setInput}
             onSubmit={() => send(input)}
+            thinking={thinking}
+            onStop={stopGeneration}
           />
         </div>
       )}
@@ -194,6 +256,7 @@ export function ChatInputDisplay({
   sendMessage,
   showQueryControls = true,
   refreshResponse,
+  onStop,
 }: {
   permissionNeeded?: boolean;
   refreshResponse?: () => Promise<void>;
@@ -205,6 +268,7 @@ export function ChatInputDisplay({
   setInput: React.Dispatch<SetStateAction<string>>;
   sendMessage: (val: string) => Promise<void>;
   showQueryControls: boolean;
+  onStop?: () => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -294,6 +358,7 @@ export function ChatInputDisplay({
             input={input}
             setInput={setInput}
             onSubmit={() => sendMessage(input)}
+            onStop={onStop}
           />
         </div>
       </div>
@@ -684,6 +749,8 @@ function ChatInput({
   model,
   onModelChange,
   showQueryControls,
+  thinking,
+  onStop,
 }: {
   model: TomeAgentModel;
   onModelChange: React.Dispatch<SetStateAction<TomeAgentModel>>;
@@ -692,7 +759,21 @@ function ChatInput({
   onSubmit: () => void;
   thinking?: boolean;
   showQueryControls?: boolean;
+  onStop?: () => void;
 }) {
+  // Handle Escape key to cancel generation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && thinking && onStop) {
+        e.preventDefault();
+        onStop();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [thinking, onStop]);
+
   const handleSubmit = () => {
     if (input.trim()) {
       // Only submit if there's actual content
@@ -731,16 +812,26 @@ function ChatInput({
         <Tooltip delayDuration={1000}>
           <TooltipTrigger asChild>
             <div>
-              <Button
-                onClick={handleSubmit}
-                variant="outline"
-                className="size-9 rounded-lg bg-gradient-to-b from-zinc-700/50 to-zinc-800/50 border-zinc-600 hover:from-zinc-600/50 hover:to-zinc-700/50 hover:border-zinc-500 transition-all"
-              >
-                <ArrowUp className="size-4 stroke-[2.5]" />
-              </Button>
+              {thinking ? (
+                <Button
+                  onClick={onStop}
+                  variant="outline"
+                  className="size-9 rounded-lg bg-gradient-to-b from-red-900/50 to-red-950/50 border-red-700 hover:from-red-800/50 hover:to-red-900/50 hover:border-red-600 transition-all"
+                >
+                  <Square className="size-3.5 fill-current" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSubmit}
+                  variant="outline"
+                  className="size-9 rounded-lg bg-gradient-to-b from-zinc-700/50 to-zinc-800/50 border-zinc-600 hover:from-zinc-600/50 hover:to-zinc-700/50 hover:border-zinc-500 transition-all"
+                >
+                  <ArrowUp className="size-4 stroke-[2.5]" />
+                </Button>
+              )}
             </div>
           </TooltipTrigger>
-          <TooltipContent>Enter to send</TooltipContent>
+          <TooltipContent>{thinking ? "Stop generation (Esc)" : "Enter to send"}</TooltipContent>
         </Tooltip>
       </div>
     </div>

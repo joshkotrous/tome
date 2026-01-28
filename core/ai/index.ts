@@ -43,6 +43,7 @@ function createRendererProxy(): typeof fetch {
     let method: string = "GET";
     let headers: Record<string, string> = {};
     let body: string | undefined;
+    let abortSignal: AbortSignal | undefined = init?.signal ?? undefined;
 
     if (input instanceof Request) {
       const clonedRequest = input.clone();
@@ -51,6 +52,10 @@ function createRendererProxy(): typeof fetch {
       clonedRequest.headers.forEach((value, key) => {
         headers[key] = value;
       });
+      // Get signal from Request if not in init
+      if (!abortSignal && clonedRequest.signal) {
+        abortSignal = clonedRequest.signal;
+      }
       try {
         body = await clonedRequest.text();
       } catch {
@@ -72,6 +77,11 @@ function createRendererProxy(): typeof fetch {
     }
     if (init?.body !== undefined) {
       body = typeof init.body === "string" ? init.body : String(init.body);
+    }
+
+    // Check if already aborted before starting
+    if (abortSignal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
     }
 
     // Proxy all AI API requests to avoid CORS issues
@@ -97,24 +107,68 @@ function createRendererProxy(): typeof fetch {
     const streamId = result.streamId;
     const channel = `ai-stream-${streamId}`;
     
+    // Track if the stream has been aborted
+    let isAborted = false;
+    let streamListener: ((_event: unknown, data: { chunk?: string; done: boolean; error?: string }) => void) | null = null;
+    
+    // Helper to handle abort
+    const handleAbort = (controller: ReadableStreamDefaultController) => {
+      if (isAborted) return;
+      isAborted = true;
+      if (streamListener) {
+        window.ipcRenderer.off(channel, streamListener);
+      }
+      // Notify the main process to cancel the stream
+      if (typeof (window.proxy as any).cancelStream === 'function') {
+        (window.proxy as any).cancelStream(streamId);
+      }
+      try {
+        controller.error(new DOMException('Aborted', 'AbortError'));
+      } catch {
+        // Controller might already be closed
+      }
+    };
+    
     const stream = new ReadableStream({
       start(controller) {
-        const listener = (_event: unknown, data: { chunk?: string; done: boolean; error?: string }) => {
+        // Handle abort signal from both Request and init
+        if (abortSignal) {
+          if (abortSignal.aborted) {
+            handleAbort(controller);
+            return;
+          }
+          abortSignal.addEventListener('abort', () => handleAbort(controller));
+        }
+
+        streamListener = (_event: unknown, data: { chunk?: string; done: boolean; error?: string }) => {
+          if (isAborted) {
+            return;
+          }
           if (data.error) {
             controller.error(new Error(data.error));
-            window.ipcRenderer.off(channel, listener);
+            window.ipcRenderer.off(channel, streamListener!);
             return;
           }
           if (data.done) {
             controller.close();
-            window.ipcRenderer.off(channel, listener);
+            window.ipcRenderer.off(channel, streamListener!);
             return;
           }
           if (data.chunk) {
             controller.enqueue(new TextEncoder().encode(data.chunk));
           }
         };
-        window.ipcRenderer.on(channel, listener);
+        window.ipcRenderer.on(channel, streamListener);
+      },
+      cancel() {
+        isAborted = true;
+        if (streamListener) {
+          window.ipcRenderer.off(channel, streamListener);
+        }
+        // Notify the main process to cancel the stream
+        if (typeof (window.proxy as any).cancelStream === 'function') {
+          (window.proxy as any).cancelStream(streamId);
+        }
       },
     });
 
@@ -251,6 +305,7 @@ export interface StreamResponseOptions {
   toolChoice?: ToolChoice<ToolMap>;
   onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>;
   localModel?: LocalModel;
+  abortSignal?: AbortSignal;
 }
 
 export function streamResponse(
@@ -271,7 +326,8 @@ export function streamResponse(
         opts.onChunk,
         opts.onFinish,
         opts.toolChoice,
-        opts.onStepFinish
+        opts.onStepFinish,
+        opts.abortSignal
       );
     case "Anthropic":
       return streamAnthropic(
@@ -286,7 +342,8 @@ export function streamResponse(
         opts.onChunk,
         opts.onFinish,
         opts.toolChoice,
-        opts.onStepFinish
+        opts.onStepFinish,
+        opts.abortSignal
       );
     case "Local":
       if (!opts.localModel?.url) {
@@ -304,7 +361,8 @@ export function streamResponse(
         opts.onChunk,
         opts.onFinish,
         opts.toolChoice,
-        opts.onStepFinish
+        opts.onStepFinish,
+        opts.abortSignal
       );
     default:
       throw new Error(`Unsupported provider: ${opts.provider}`);
@@ -323,7 +381,8 @@ function streamOpenAI(
   onChunk?: StreamTextOnChunkCallback<ToolMap>,
   onFinish?: StreamTextOnFinishCallback<ToolMap>,
   toolChoice?: ToolChoice<ToolMap>,
-  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>
+  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>,
+  abortSignal?: AbortSignal
 ): StreamTextResult<ToolMap, never> {
   const proxyFetch = getProxyFetch();
   const openai = createOpenAI({ apiKey, fetch: proxyFetch });
@@ -339,6 +398,7 @@ function streamOpenAI(
     onFinish,
     toolChoice,
     onStepFinish,
+    abortSignal,
   });
 }
 
@@ -354,7 +414,8 @@ function streamAnthropic(
   onChunk?: StreamTextOnChunkCallback<ToolMap>,
   onFinish?: StreamTextOnFinishCallback<ToolMap>,
   toolChoice?: ToolChoice<ToolMap>,
-  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>
+  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>,
+  abortSignal?: AbortSignal
 ): StreamTextResult<ToolMap, never> {
   function getAnthropicModel(model: TomeAnthropicAgentModel) {
     switch (model) {
@@ -384,6 +445,7 @@ function streamAnthropic(
     onFinish,
     toolChoice,
     onStepFinish,
+    abortSignal,
   });
 }
 
@@ -399,7 +461,8 @@ function streamLocalModel(
   onChunk?: StreamTextOnChunkCallback<ToolMap>,
   onFinish?: StreamTextOnFinishCallback<ToolMap>,
   toolChoice?: ToolChoice<ToolMap>,
-  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>
+  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>,
+  abortSignal?: AbortSignal
 ): StreamTextResult<ToolMap, never> {
   // Create OpenAI-compatible provider pointing to local server
   // Local models typically don't require an API key, but we pass a dummy one
@@ -423,6 +486,7 @@ function streamLocalModel(
     onFinish,
     toolChoice,
     onStepFinish,
+    abortSignal,
   });
 }
 
