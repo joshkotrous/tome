@@ -382,12 +382,16 @@ function AdvancedSettingsPage() {
   const [initialSettings, setInitialSettings] = useState<SettingsType | null>(
     null
   );
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null);
 
   useEffect(() => {
     async function getData() {
       const _settings = await window.settings.getSettings();
       setSettings(_settings);
       setInitialSettings(_settings);
+      
+      const version = await window.updates.getCurrentVersion();
+      setCurrentVersion(version);
     }
     getData();
   }, []);
@@ -506,7 +510,12 @@ function AdvancedSettingsPage() {
 
   return (
     <div className="pt-1 space-y-4 w-full">
-      <h2 className="font-semibold text-xl">Advanced</h2>
+      <div className="flex items-baseline justify-between">
+        <h2 className="font-semibold text-xl">Advanced</h2>
+        {currentVersion && (
+          <span className="text-xs text-zinc-500">v{currentVersion}</span>
+        )}
+      </div>
       <div className="space-y-3">
         <div className="bg-zinc-900 p-4 px-4 space-y-2 rounded-md">
           <div className="flex justify-between items-center">
