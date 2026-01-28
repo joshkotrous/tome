@@ -49,7 +49,11 @@ import { Text } from "./ui/text";
 import { AnimateEllipse } from "./animatedEllipse";
 import { useAgent } from "@/agent/useAgent";
 import { useConversationData } from "@/conversationDataProvider";
-import { DataVisualization, VisualizationData, VisualizationLoading } from "./dataVisualization";
+import {
+  DataVisualization,
+  VisualizationData,
+  VisualizationLoading,
+} from "./dataVisualization";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -77,7 +81,7 @@ export default function ChatInterface() {
     setModel(
       settings?.aiFeatures.providers.openai.enabled
         ? { provider: "Open AI", name: "gpt-4o" }
-        : { provider: "Anthropic", name: "claude-sonnet-4" }
+        : { provider: "Anthropic", name: "claude-sonnet-4" },
     );
   }, [settings]);
 
@@ -251,7 +255,7 @@ export function ChatInputDisplay({
                 <div
                   className={cn(
                     "flex py-1",
-                    message.role === "user" && "justify-end"
+                    message.role === "user" && "justify-end",
                   )}
                 >
                   <ChatMessage sendMessage={sendMessage} message={message} />
@@ -355,7 +359,7 @@ export function DatabaseSwitcher() {
         value={currentConnection?.id?.toString()}
         onValueChange={(value) => {
           const selectedConnection = connections.find(
-            (c) => c.id.toString() === value
+            (c) => c.id.toString() === value,
           );
           if (selectedConnection) {
             setCurrentConnection(selectedConnection);
@@ -363,10 +367,10 @@ export function DatabaseSwitcher() {
         }}
       >
         <TooltipTrigger asChild>
-          <div>
-            <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900">
-              <Database className="size-3" />
-              {currentConnection?.name}
+          <div className="shrink-0">
+            <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900 max-w-32">
+              <Database className="size-3 shrink-0" />
+              <span className="truncate">{currentConnection?.name}</span>
             </SelectTrigger>
           </div>
         </TooltipTrigger>
@@ -414,10 +418,10 @@ export function QuerySwitcher() {
         }}
       >
         <TooltipTrigger asChild>
-          <div>
-            <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900">
-              <FileCode className="size-3" />
-              {currentQuery?.title}
+          <div className="shrink-0">
+            <SelectTrigger className="!h-fit !p-1 gap-1.5 !text-white text-xs !bg-zinc-900 max-w-32">
+              <FileCode className="size-3 shrink-0" />
+              <span className="truncate">{currentQuery?.title}</span>
             </SelectTrigger>
           </div>
         </TooltipTrigger>
@@ -533,7 +537,7 @@ function ConversationsList({
         {open && !selectedConversation && (
           <div
             className={cn(
-              "rounded-sm p-1 gap-4 px-4 pr-1 items-center text-sm text-nowrap whitespace-nowrap overflow-hidden hover:bg-zinc-800 select-none transition-all flex bg-zinc-800 text-white flex-shrink-0"
+              "rounded-sm p-1 gap-4 px-4 pr-1 items-center text-sm text-nowrap whitespace-nowrap overflow-hidden hover:bg-zinc-800 select-none transition-all flex bg-zinc-800 text-white flex-shrink-0",
             )}
           >
             New conversation
@@ -574,7 +578,7 @@ function ConversationListItem({
     const pollForName = async () => {
       try {
         const updatedConversation = await window.conversations.getConversation(
-          conversation.id
+          conversation.id,
         );
 
         if (!isCancelled && updatedConversation?.name) {
@@ -613,7 +617,8 @@ function ConversationListItem({
       onClick={() => setSelectedConversation(conversation)}
       className={cn(
         "rounded-sm text-zinc-400 p-1 gap-2 px-4 pr-1 items-center text-sm hover:bg-zinc-800 select-none transition-all flex flex-shrink-0",
-        selectedConversation?.id === conversation.id && "bg-zinc-800 text-white"
+        selectedConversation?.id === conversation.id &&
+          "bg-zinc-800 text-white",
       )}
     >
       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
@@ -696,47 +701,47 @@ function ChatInput({
   };
 
   return (
-    <div className="bg-zinc-900 rounded-md border p-2 flex items-end gap-2 w-full max-w-2xl relative z-50">
-      <div className="w-full flex flex-col gap-2">
+    <div className="bg-zinc-900 rounded-md border p-2 flex flex-col gap-2 w-full max-w-2xl relative z-50">
+      {/* Top controls row */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <ModelPicker model={model} onModelChange={onModelChange} />
         {showQueryControls && (
-          <div className="w-full flex gap-1.5">
+          <>
             <QuerySwitcher />
             <DatabaseSwitcher />
-          </div>
+          </>
         )}
+      </div>
 
-        <div className="flex items-center gap-2">
-          <ModelPicker model={model} onModelChange={onModelChange} />
-        </div>
-        <div className="flex items-end gap-2">
-          <Textarea
-            placeholder="Enter a message..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            className="font-medium border-none bg-zinc-900 dark:bg-input/0 h-20 text-sm"
-            onKeyDown={(e) => {
-              // Handle Cmd+Enter only within the textarea
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
-          />
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <div>
-                <Button
-                  onClick={handleSubmit}
-                  variant="secondary"
-                  className="rounded-full has-[>svg]:p-2 h-fit"
-                >
-                  <ArrowUp className="stroke-3" />
-                </Button>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>⌘ ↵ </TooltipContent>
-          </Tooltip>
-        </div>
+      {/* Input and send button row */}
+      <div className="flex items-end gap-2">
+        <Textarea
+          placeholder="Enter a message..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          className="font-medium border-none bg-zinc-900 dark:bg-input/0 h-20 text-sm flex-1"
+          onKeyDown={(e) => {
+            // Enter sends message, Shift+Enter creates new line
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+        />
+        <Tooltip delayDuration={1000}>
+          <TooltipTrigger asChild>
+            <div>
+              <Button
+                onClick={handleSubmit}
+                variant="outline"
+                className="size-9 rounded-lg bg-gradient-to-b from-zinc-700/50 to-zinc-800/50 border-zinc-600 hover:from-zinc-600/50 hover:to-zinc-700/50 hover:border-zinc-500 transition-all"
+              >
+                <ArrowUp className="size-4 stroke-[2.5]" />
+              </Button>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>Enter to send</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );
@@ -762,12 +767,18 @@ function ModelPicker({
 
     // Add OpenAI models if enabled
     if (openai.enabled) {
-      models = [...models, ...TomeAgentModels.filter((model) => model.provider === "Open AI")];
+      models = [
+        ...models,
+        ...TomeAgentModels.filter((model) => model.provider === "Open AI"),
+      ];
     }
 
     // Add Anthropic models if enabled
     if (anthropic.enabled) {
-      models = [...models, ...TomeAgentModels.filter((model) => model.provider === "Anthropic")];
+      models = [
+        ...models,
+        ...TomeAgentModels.filter((model) => model.provider === "Anthropic"),
+      ];
     }
 
     // Add local models if configured
@@ -782,21 +793,24 @@ function ModelPicker({
 
   // Check if the current model is still available
   const isCurrentModelAvailable = availableModels.some(
-    (availableModel) => availableModel.name === model.name
+    (availableModel) => availableModel.name === model.name,
   );
 
   // Group models by provider for better organization when both providers are enabled
   const groupedModels = useMemo(() => {
     if (availableModels.length === 0) return {};
 
-    return availableModels.reduce((groups, model) => {
-      const provider = model.provider;
-      if (!groups[provider]) {
-        groups[provider] = [];
-      }
-      groups[provider].push(model);
-      return groups;
-    }, {} as Record<string, TomeAgentModel[]>);
+    return availableModels.reduce(
+      (groups, model) => {
+        const provider = model.provider;
+        if (!groups[provider]) {
+          groups[provider] = [];
+        }
+        groups[provider].push(model);
+        return groups;
+      },
+      {} as Record<string, TomeAgentModel[]>,
+    );
   }, [availableModels]);
 
   // If current model is not available, auto-select the first available model
@@ -813,7 +827,7 @@ function ModelPicker({
   if (availableModels.length === 0) {
     return (
       <Select disabled>
-        <SelectTrigger className="border !bg-zinc-950/40 !p-0 !h-fit !p-1 !px-2 text-xs opacity-50">
+        <SelectTrigger className="border !bg-zinc-950/40 !h-fit !p-1 !px-2 text-xs opacity-50">
           No models available
         </SelectTrigger>
       </Select>
@@ -827,16 +841,20 @@ function ModelPicker({
       value={model.name}
       onValueChange={(val: string) => {
         // First check static models, then check available models (which includes local)
-        const selectedModel = TomeAgentModels.find((i) => i.name === val) 
-          ?? availableModels.find((i) => i.name === val);
+        const selectedModel =
+          TomeAgentModels.find((i) => i.name === val) ??
+          availableModels.find((i) => i.name === val);
         if (selectedModel) {
           onModelChange(selectedModel);
         }
       }}
     >
-      <SelectTrigger className="border !bg-zinc-950/40 !p-0 !h-fit !p-1 !px-2 text-xs">
-        <AIProviderLogo className="size-3.5" provider={model.provider} />
-        {model.name}
+      <SelectTrigger className="border !bg-zinc-950/40 !h-fit !p-1 !px-2 text-xs shrink-0 max-w-40">
+        <AIProviderLogo
+          className="size-3.5 shrink-0"
+          provider={model.provider}
+        />
+        <span className="truncate">{model.name}</span>
       </SelectTrigger>
       <SelectContent className="">
         {shouldGroupByProvider
@@ -890,14 +908,15 @@ function toolDisplay(
     | ToolInvocationUIPart
     | SourceUIPart
     | FileUIPart
-    | StepStartUIPart
+    | StepStartUIPart,
 ): ToolDisplayResult | undefined {
   if (part.type !== "tool-invocation") {
     return;
   }
 
   const { state, toolName, args } = part.toolInvocation;
-  const result = "result" in part.toolInvocation ? part.toolInvocation.result : undefined;
+  const result =
+    "result" in part.toolInvocation ? part.toolInvocation.result : undefined;
 
   if (toolName === "getSchema") {
     if (state === "partial-call") {
@@ -927,7 +946,7 @@ function toolDisplay(
 
   if (toolName === "runQuery") {
     const queryStr = args?.query as string | undefined;
-    
+
     if (state === "partial-call") {
       return {
         text: (
@@ -940,10 +959,13 @@ function toolDisplay(
     }
 
     // Parse the result
-    let queryResult: { records: any[]; totalCount: number; error?: string } | undefined;
+    let queryResult:
+      | { records: any[]; totalCount: number; error?: string }
+      | undefined;
     if (result) {
       try {
-        const resultStr = typeof result === "string" ? result : JSON.stringify(result);
+        const resultStr =
+          typeof result === "string" ? result : JSON.stringify(result);
         const parsed = JSON.parse(resultStr);
         if (parsed.error) {
           queryResult = { records: [], totalCount: 0, error: parsed.error };
@@ -958,7 +980,7 @@ function toolDisplay(
       }
     }
 
-    return { 
+    return {
       text: "Ran query",
       query: queryStr,
       queryResult,
@@ -967,7 +989,7 @@ function toolDisplay(
 
   if (toolName === "visualizeData") {
     const queryStr = args?.query as string | undefined;
-    
+
     if (state === "partial-call") {
       return {
         text: (
@@ -983,16 +1005,17 @@ function toolDisplay(
     // Parse the result to extract visualization data
     if (state === "result" && result) {
       try {
-        const resultStr = typeof result === "string" ? result : JSON.stringify(result);
+        const resultStr =
+          typeof result === "string" ? result : JSON.stringify(result);
         const parsed = JSON.parse(resultStr);
-        
+
         if (parsed.error) {
-          return { 
+          return {
             text: `Visualization error: ${parsed.error}`,
             query: queryStr,
           };
         }
-        
+
         if (parsed.visualization) {
           return {
             text: (
@@ -1042,16 +1065,21 @@ function ToolResultAccordion({
   const isVisualization = toolName === "visualizeData";
   const isRunQuery = toolName === "runQuery";
   const isAskPermission = toolName === "askForPermission";
-  
+
   // Use metadata as fallback for persisted messages
   const queryFromMetadata = messageMetadata?.queryResults?.query;
   const resultsFromMetadata = messageMetadata?.queryResults;
-  
-  const hasQuery = display?.query || toolInvocation.args?.query || queryFromMetadata;
-  const queryResults = display?.queryResult || (resultsFromMetadata ? {
-    records: resultsFromMetadata.records,
-    totalCount: resultsFromMetadata.totalCount,
-  } : undefined);
+
+  const hasQuery =
+    display?.query || toolInvocation.args?.query || queryFromMetadata;
+  const queryResults =
+    display?.queryResult ||
+    (resultsFromMetadata
+      ? {
+          records: resultsFromMetadata.records,
+          totalCount: resultsFromMetadata.totalCount,
+        }
+      : undefined);
   const hasResults = queryResults && !queryResults.error;
   const hasError = display?.queryResult?.error;
 
@@ -1066,9 +1094,7 @@ function ToolResultAccordion({
           {toolInvocation.state === "result" && !hasError && (
             <Check className="size-3.5 text-green-500" />
           )}
-          {hasError && (
-            <span className="text-red-500">✕</span>
-          )}
+          {hasError && <span className="text-red-500">✕</span>}
           {display?.text}
         </div>
 
@@ -1080,14 +1106,22 @@ function ToolResultAccordion({
               className="flex items-center gap-0.5 text-xs text-zinc-500 hover:text-zinc-300 transition-all cursor-pointer select-none"
             >
               <ChevronRight
-                className={cn("size-3.5 transition-transform", queryOpen && "rotate-90")}
+                className={cn(
+                  "size-3.5 transition-transform",
+                  queryOpen && "rotate-90",
+                )}
               />
               View Query
             </div>
             {queryOpen && (
               <div className="max-w-md overflow-auto">
                 <TomeSyntaxHighlighter
-                  content={display?.query || toolInvocation.args?.query || queryFromMetadata || ""}
+                  content={
+                    display?.query ||
+                    toolInvocation.args?.query ||
+                    queryFromMetadata ||
+                    ""
+                  }
                   language="sql"
                   showLineNumbers={false}
                 />
@@ -1110,7 +1144,10 @@ function ToolResultAccordion({
                   className="flex items-center gap-0.5 text-xs text-zinc-500 hover:text-zinc-300 transition-all cursor-pointer select-none"
                 >
                   <ChevronRight
-                    className={cn("size-3.5 transition-transform", resultsOpen && "rotate-90")}
+                    className={cn(
+                      "size-3.5 transition-transform",
+                      resultsOpen && "rotate-90",
+                    )}
                   />
                   View Results ({queryResults?.totalCount} rows)
                 </div>
@@ -1155,7 +1192,10 @@ function QueryResultPreview({ records }: { records: any[] }) {
       <thead className="bg-zinc-900 sticky top-0">
         <tr>
           {columns.map((col) => (
-            <th key={col} className="px-2 py-1 text-left text-zinc-400 font-medium border-b border-zinc-800">
+            <th
+              key={col}
+              className="px-2 py-1 text-left text-zinc-400 font-medium border-b border-zinc-800"
+            >
               {col}
             </th>
           ))}
@@ -1163,17 +1203,30 @@ function QueryResultPreview({ records }: { records: any[] }) {
       </thead>
       <tbody>
         {displayRecords.map((row, i) => (
-          <tr key={i} className="border-b border-zinc-800/50 hover:bg-zinc-900/50">
+          <tr
+            key={i}
+            className="border-b border-zinc-800/50 hover:bg-zinc-900/50"
+          >
             {columns.map((col) => (
-              <td key={col} className="px-2 py-1 text-zinc-300 truncate max-w-32">
-                {row[col] === null ? <span className="text-zinc-500">null</span> : String(row[col])}
+              <td
+                key={col}
+                className="px-2 py-1 text-zinc-300 truncate max-w-32"
+              >
+                {row[col] === null ? (
+                  <span className="text-zinc-500">null</span>
+                ) : (
+                  String(row[col])
+                )}
               </td>
             ))}
           </tr>
         ))}
         {records.length > 10 && (
           <tr>
-            <td colSpan={columns.length} className="px-2 py-1 text-zinc-500 text-center">
+            <td
+              colSpan={columns.length}
+              className="px-2 py-1 text-zinc-500 text-center"
+            >
               ... and {records.length - 10} more rows
             </td>
           </tr>
@@ -1198,13 +1251,13 @@ function ChatMessage({
     <div
       className={cn(
         "overflow-auto max-w-xl",
-        fromUser ? "items-end py-4" : "items-start"
+        fromUser ? "items-end py-4" : "items-start",
       )}
     >
       {message.role === "assistant" &&
         toolParts.map((k, index) => {
           if (k.type !== "tool-invocation") return null;
-          
+
           const display = toolDisplay(k);
 
           return (
@@ -1223,15 +1276,17 @@ function ChatMessage({
           <span
             className={cn(
               "pb-2 w-full flex text-xs text-zinc-400 capitalize",
-              fromUser && "justify-end "
+              fromUser && "justify-end ",
             )}
           >
             {message.role}
           </span>
           <div
             className={cn(
-              "rounded-lg px-4 py-3 whitespace-pre-wrap break-words",
-              fromUser ? "bg-zinc-600 text-white" : "bg-zinc-800 text-zinc-100"
+              " px-4 py-3 whitespace-pre-wrap break-words",
+              fromUser
+                ? "border-r-2 border-r-zinc-600 text-white"
+                : "border-l-2 border-l-zinc-700 text-zinc-100",
             )}
           >
             <MarkdownRenderer content={message.content} />
