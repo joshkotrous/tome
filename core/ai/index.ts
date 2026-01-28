@@ -12,7 +12,7 @@ import {
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { streamText } from "ai";
-import { AIProvider } from "../../src/types";
+import { AIProvider, LocalModel } from "../../src/types";
 import { createMainProcessAIProxy } from "./proxy";
 import z from "zod";
 
@@ -43,6 +43,7 @@ function createRendererProxy(): typeof fetch {
     let method: string = "GET";
     let headers: Record<string, string> = {};
     let body: string | undefined;
+    let abortSignal: AbortSignal | undefined = init?.signal ?? undefined;
 
     if (input instanceof Request) {
       const clonedRequest = input.clone();
@@ -51,6 +52,10 @@ function createRendererProxy(): typeof fetch {
       clonedRequest.headers.forEach((value, key) => {
         headers[key] = value;
       });
+      // Get signal from Request if not in init
+      if (!abortSignal && clonedRequest.signal) {
+        abortSignal = clonedRequest.signal;
+      }
       try {
         body = await clonedRequest.text();
       } catch {
@@ -74,8 +79,18 @@ function createRendererProxy(): typeof fetch {
       body = typeof init.body === "string" ? init.body : String(init.body);
     }
 
-    const needsProxy = urlString.includes("api.anthropic.com") || urlString.includes("api.openai.com");
-    if (!needsProxy) {
+    // Check if already aborted before starting
+    if (abortSignal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
+    // Proxy all AI API requests to avoid CORS issues
+    // This includes OpenAI, Anthropic, and local model servers
+    const isExternalAPI = urlString.includes("api.anthropic.com") || 
+                          urlString.includes("api.openai.com") ||
+                          urlString.includes("/v1/chat/completions") ||
+                          urlString.includes("/v1/completions");
+    if (!isExternalAPI) {
       return fetch(input, init);
     }
 
@@ -92,24 +107,68 @@ function createRendererProxy(): typeof fetch {
     const streamId = result.streamId;
     const channel = `ai-stream-${streamId}`;
     
+    // Track if the stream has been aborted
+    let isAborted = false;
+    let streamListener: ((_event: unknown, data: { chunk?: string; done: boolean; error?: string }) => void) | null = null;
+    
+    // Helper to handle abort
+    const handleAbort = (controller: ReadableStreamDefaultController) => {
+      if (isAborted) return;
+      isAborted = true;
+      if (streamListener) {
+        window.ipcRenderer.off(channel, streamListener);
+      }
+      // Notify the main process to cancel the stream
+      if (typeof (window.proxy as any).cancelStream === 'function') {
+        (window.proxy as any).cancelStream(streamId);
+      }
+      try {
+        controller.error(new DOMException('Aborted', 'AbortError'));
+      } catch {
+        // Controller might already be closed
+      }
+    };
+    
     const stream = new ReadableStream({
       start(controller) {
-        const listener = (_event: unknown, data: { chunk?: string; done: boolean; error?: string }) => {
+        // Handle abort signal from both Request and init
+        if (abortSignal) {
+          if (abortSignal.aborted) {
+            handleAbort(controller);
+            return;
+          }
+          abortSignal.addEventListener('abort', () => handleAbort(controller));
+        }
+
+        streamListener = (_event: unknown, data: { chunk?: string; done: boolean; error?: string }) => {
+          if (isAborted) {
+            return;
+          }
           if (data.error) {
             controller.error(new Error(data.error));
-            window.ipcRenderer.off(channel, listener);
+            window.ipcRenderer.off(channel, streamListener!);
             return;
           }
           if (data.done) {
             controller.close();
-            window.ipcRenderer.off(channel, listener);
+            window.ipcRenderer.off(channel, streamListener!);
             return;
           }
           if (data.chunk) {
             controller.enqueue(new TextEncoder().encode(data.chunk));
           }
         };
-        window.ipcRenderer.on(channel, listener);
+        window.ipcRenderer.on(channel, streamListener);
+      },
+      cancel() {
+        isAborted = true;
+        if (streamListener) {
+          window.ipcRenderer.off(channel, streamListener);
+        }
+        // Notify the main process to cancel the stream
+        if (typeof (window.proxy as any).cancelStream === 'function') {
+          (window.proxy as any).cancelStream(streamId);
+        }
       },
     });
 
@@ -139,8 +198,8 @@ export const TomeAnthropicAgentModelObject = z.enum([
 ]);
 
 const ModelObject = z.object({
-  provider: z.enum(["Open AI", "Anthropic"]),
-  name: z.union([TomeOAIAgentModelObject, TomeAnthropicAgentModelObject]),
+  provider: z.enum(["Open AI", "Anthropic", "Local"]),
+  name: z.union([TomeOAIAgentModelObject, TomeAnthropicAgentModelObject, z.string()]),
 });
 
 export const TomeAgentModels: z.infer<typeof ModelObject>[] = [
@@ -197,12 +256,35 @@ export const TomeAgentModels: z.infer<typeof ModelObject>[] = [
   },
 ];
 
+/**
+ * Helper function to get local models for display in the UI
+ */
+export function getLocalModels(localModel?: LocalModel): z.infer<typeof ModelObject>[] {
+  if (!localModel?.url || !localModel.models.length) {
+    return [];
+  }
+  return localModel.models.map((modelId) => ({
+    name: modelId,
+    provider: "Local" as const,
+  }));
+}
+
+/**
+ * Check if a model is a local model
+ */
+export function isLocalModel(modelName: string, localModel?: LocalModel): boolean {
+  if (!localModel?.url || !localModel.models.length) {
+    return false;
+  }
+  return localModel.models.includes(modelName);
+}
+
 export type TomeOAIAgentModel = z.infer<typeof TomeOAIAgentModelObject>;
 export type TomeAnthropicAgentModel = z.infer<
   typeof TomeAnthropicAgentModelObject
 >;
 
-export type TomeAgentModelOption = TomeOAIAgentModel | TomeAnthropicAgentModel;
+export type TomeAgentModelOption = TomeOAIAgentModel | TomeAnthropicAgentModel | string;
 
 export type TomeAgentModel = z.infer<typeof ModelObject>;
 
@@ -222,6 +304,8 @@ export interface StreamResponseOptions {
   onFinish?: StreamTextOnFinishCallback<ToolMap>;
   toolChoice?: ToolChoice<ToolMap>;
   onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>;
+  localModel?: LocalModel;
+  abortSignal?: AbortSignal;
 }
 
 export function streamResponse(
@@ -242,7 +326,8 @@ export function streamResponse(
         opts.onChunk,
         opts.onFinish,
         opts.toolChoice,
-        opts.onStepFinish
+        opts.onStepFinish,
+        opts.abortSignal
       );
     case "Anthropic":
       return streamAnthropic(
@@ -257,7 +342,27 @@ export function streamResponse(
         opts.onChunk,
         opts.onFinish,
         opts.toolChoice,
-        opts.onStepFinish
+        opts.onStepFinish,
+        opts.abortSignal
+      );
+    case "Local":
+      if (!opts.localModel?.url) {
+        throw new Error("Local model URL is required for Local provider");
+      }
+      return streamLocalModel(
+        opts.localModel.url,
+        tools,
+        opts.system,
+        opts.messages,
+        prompt,
+        opts.model,
+        opts.maxSteps,
+        opts.toolCallStreaming,
+        opts.onChunk,
+        opts.onFinish,
+        opts.toolChoice,
+        opts.onStepFinish,
+        opts.abortSignal
       );
     default:
       throw new Error(`Unsupported provider: ${opts.provider}`);
@@ -276,7 +381,8 @@ function streamOpenAI(
   onChunk?: StreamTextOnChunkCallback<ToolMap>,
   onFinish?: StreamTextOnFinishCallback<ToolMap>,
   toolChoice?: ToolChoice<ToolMap>,
-  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>
+  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>,
+  abortSignal?: AbortSignal
 ): StreamTextResult<ToolMap, never> {
   const proxyFetch = getProxyFetch();
   const openai = createOpenAI({ apiKey, fetch: proxyFetch });
@@ -292,6 +398,7 @@ function streamOpenAI(
     onFinish,
     toolChoice,
     onStepFinish,
+    abortSignal,
   });
 }
 
@@ -307,7 +414,8 @@ function streamAnthropic(
   onChunk?: StreamTextOnChunkCallback<ToolMap>,
   onFinish?: StreamTextOnFinishCallback<ToolMap>,
   toolChoice?: ToolChoice<ToolMap>,
-  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>
+  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>,
+  abortSignal?: AbortSignal
 ): StreamTextResult<ToolMap, never> {
   function getAnthropicModel(model: TomeAnthropicAgentModel) {
     switch (model) {
@@ -337,6 +445,48 @@ function streamAnthropic(
     onFinish,
     toolChoice,
     onStepFinish,
+    abortSignal,
+  });
+}
+
+function streamLocalModel(
+  baseURL: string,
+  tools: ToolMap,
+  system?: string,
+  messages?: Omit<Message, "id">[],
+  prompt?: string,
+  model: string = "llama3.2",
+  maxSteps = 10,
+  toolCallStreaming?: boolean,
+  onChunk?: StreamTextOnChunkCallback<ToolMap>,
+  onFinish?: StreamTextOnFinishCallback<ToolMap>,
+  toolChoice?: ToolChoice<ToolMap>,
+  onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>,
+  abortSignal?: AbortSignal
+): StreamTextResult<ToolMap, never> {
+  // Create OpenAI-compatible provider pointing to local server
+  // Local models typically don't require an API key, but we pass a dummy one
+  // Use proxy fetch to avoid CORS issues in renderer process
+  const proxyFetch = getProxyFetch();
+  const localProvider = createOpenAI({
+    baseURL,
+    apiKey: "local-model", // Dummy API key for local models
+    fetch: proxyFetch,
+  });
+
+  return streamText({
+    model: localProvider(model),
+    prompt,
+    system,
+    tools,
+    messages,
+    maxSteps,
+    toolCallStreaming,
+    onChunk,
+    onFinish,
+    toolChoice,
+    onStepFinish,
+    abortSignal,
   });
 }
 
@@ -346,8 +496,10 @@ export async function getResponse(opts: {
   tools?: ToolMap;
   apiKey: string;
   provider: AIProvider;
+  model?: string;
   messages?: Omit<Message, "id">[];
   onStepFinish?: StreamTextOnStepFinishCallback<ToolMap>;
+  localModel?: LocalModel;
 }): Promise<GenerateTextResult<ToolMap, never>> {
   const { prompt, tools = {} } = opts;
   switch (opts.provider) {
@@ -366,6 +518,18 @@ export async function getResponse(opts: {
         opts.system,
         opts.messages,
         prompt
+      );
+    case "Local":
+      if (!opts.localModel?.url) {
+        throw new Error("Local model URL is required for Local provider");
+      }
+      return await generateLocalModel(
+        opts.localModel.url,
+        tools,
+        opts.system,
+        opts.messages,
+        prompt,
+        opts.model
       );
     default:
       throw new Error(`Unsupported provider: ${opts.provider}`);
@@ -404,6 +568,31 @@ async function generateAnthropic(
   const anthropic = createAnthropic({ apiKey, fetch: proxyFetch });
   return await generateText({
     model: anthropic("claude-haiku-4-5"),
+    prompt,
+    system,
+    tools,
+    messages,
+    maxSteps,
+  });
+}
+
+async function generateLocalModel(
+  baseURL: string,
+  tools: ToolMap,
+  system?: string,
+  messages?: Omit<Message, "id">[],
+  prompt?: string,
+  model: string = "llama3.2",
+  maxSteps = 5
+): Promise<GenerateTextResult<ToolMap, never>> {
+  const proxyFetch = getProxyFetch();
+  const localProvider = createOpenAI({
+    baseURL,
+    apiKey: "local-model",
+    fetch: proxyFetch,
+  });
+  return await generateText({
+    model: localProvider(model),
     prompt,
     system,
     tools,

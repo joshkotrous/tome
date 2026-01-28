@@ -32,7 +32,14 @@ export type Connection = {
   settings: ConnectionSettings;
 };
 
-export type AIProvider = "Open AI" | "Anthropic";
+export type AIProvider = "Open AI" | "Anthropic" | "Local";
+
+export const LocalModelObject = z.object({
+  url: z.string(),
+  models: z.array(z.string()),
+});
+
+export type LocalModel = z.infer<typeof LocalModelObject>;
 
 export const SettingsObject = z.object({
   setupComplete: z.boolean(),
@@ -42,6 +49,7 @@ export const SettingsObject = z.object({
       anthropic: z.object({ enabled: z.boolean(), apiKey: z.string() }),
       openai: z.object({ enabled: z.boolean(), apiKey: z.string() }),
     }),
+    localModel: LocalModelObject.optional(),
   }),
   autoUpdates: z.boolean().optional().default(true),
 });

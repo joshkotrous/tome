@@ -82,7 +82,7 @@ export default function QueryInterface() {
 }
 
 export function SqlEditor() {
-  const { queries, currentQuery, runQuery, updateQuery, currentConnection } =
+  const { queries, currentQuery, runQuery, updateQuery, currentConnection, createQuery, deleteQuery } =
     useQueryData();
   const [schema, setSchema] = useState<ConnectionSchema | null>(null);
   const [queryContent, setQueryContent] = useState("");
@@ -93,6 +93,30 @@ export function SqlEditor() {
   const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(
     null
   );
+
+  // Handle keyboard shortcuts: Cmd+N for new query, Cmd+W to close current query
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+        e.preventDefault();
+        if (currentConnection) {
+          createQuery({
+            connection: currentConnection.id,
+            createdAt: new Date(),
+            query: "",
+            title: "untitled",
+          });
+        }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "w" && currentQuery) {
+        e.preventDefault();
+        deleteQuery(currentQuery);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [currentConnection, createQuery, currentQuery, deleteQuery]);
 
   // Simplified handleChange function
   const handleChange = useCallback(
@@ -380,6 +404,7 @@ function EditorAgent({
     approveQuery,
     permissionNeeded,
     setPermissionNeeded,
+    stopGeneration,
   } = useAgent({
     currentConnection: currentConnection ?? undefined,
     currentQuery: currentQuery ?? undefined,
@@ -451,6 +476,7 @@ function EditorAgent({
             setInput={setInput}
             setModel={setModel}
             sendMessage={handleSendMessage}
+            onStop={stopGeneration}
           />
         </div>
       )}
@@ -619,7 +645,7 @@ function QueryTabs() {
             </Button>
           </div>
         </TooltipTrigger>
-        <TooltipContent>New query</TooltipContent>
+        <TooltipContent>New query (⌘N)</TooltipContent>
       </Tooltip>
     </div>
   );

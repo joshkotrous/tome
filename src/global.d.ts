@@ -88,6 +88,7 @@ interface ProxyApi {
     url: string,
     options?: Record<string, unknown>
   ) => Promise<ProxyStreamResponse>;
+  cancelStream?: (streamId: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 interface JobsApi {

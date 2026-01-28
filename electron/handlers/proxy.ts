@@ -2,6 +2,26 @@ import { ipcMain } from "electron";
 
 console.log("[Proxy Handler] Module loaded - registering ai:proxy handler");
 
+// Track active streams for cancellation
+const activeStreams = new Map<string, { reader: ReadableStreamDefaultReader<Uint8Array>; cancelled: boolean }>();
+
+// Handle stream cancellation
+ipcMain.handle("ai:cancel-stream", async (_event, streamId: string) => {
+  console.log("[Proxy Handler] Cancelling stream:", streamId);
+  const stream = activeStreams.get(streamId);
+  if (stream) {
+    stream.cancelled = true;
+    try {
+      stream.reader.cancel();
+    } catch (e) {
+      console.error("[Proxy Handler] Error cancelling reader:", e);
+    }
+    activeStreams.delete(streamId);
+    return { success: true };
+  }
+  return { success: false, error: "Stream not found" };
+});
+
 ipcMain.handle("ai:proxy", async (event, { url, options }) => {
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
@@ -37,6 +57,10 @@ ipcMain.handle("ai:proxy", async (event, { url, options }) => {
     reader = response.body.getReader();
     const decoder = new TextDecoder();
 
+    // Track this stream for potential cancellation
+    const streamState = { reader, cancelled: false };
+    activeStreams.set(streamId, streamState);
+
     // Helper to safely send to renderer
     const safeSend = (channel: string, data: unknown) => {
       if (!event.sender.isDestroyed()) {
@@ -56,7 +80,7 @@ ipcMain.handle("ai:proxy", async (event, { url, options }) => {
       try {
         let result = await reader.read();
 
-        while (!result.done) {
+        while (!result.done && !streamState.cancelled) {
           const chunk = decoder.decode(result.value, { stream: true });
           chunkCount++;
           safeSend(`ai-stream-${streamId}`, {
@@ -67,10 +91,22 @@ ipcMain.handle("ai:proxy", async (event, { url, options }) => {
           result = await reader.read();
         }
 
-        console.log("[Proxy Handler] Stream completed. Total chunks:", chunkCount);
-        // Stream completed successfully
-        safeSend(`ai-stream-${streamId}`, { done: true });
+        if (streamState.cancelled) {
+          console.log("[Proxy Handler] Stream was cancelled:", streamId);
+          safeSend(`ai-stream-${streamId}`, { done: true, cancelled: true });
+        } else {
+          console.log("[Proxy Handler] Stream completed. Total chunks:", chunkCount);
+          // Stream completed successfully
+          safeSend(`ai-stream-${streamId}`, { done: true });
+        }
       } catch (streamError) {
+        // Ignore cancellation errors
+        if (streamState.cancelled) {
+          console.log("[Proxy Handler] Stream cancelled:", streamId);
+          safeSend(`ai-stream-${streamId}`, { done: true, cancelled: true });
+          return;
+        }
+
         const errorMessage =
           streamError instanceof Error
             ? streamError.message
@@ -82,6 +118,7 @@ ipcMain.handle("ai:proxy", async (event, { url, options }) => {
           done: true,
         });
       } finally {
+        activeStreams.delete(streamId);
         if (reader) {
           try {
             reader.releaseLock();
