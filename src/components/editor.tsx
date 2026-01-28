@@ -82,7 +82,7 @@ export default function QueryInterface() {
 }
 
 export function SqlEditor() {
-  const { queries, currentQuery, runQuery, updateQuery, currentConnection, createQuery } =
+  const { queries, currentQuery, runQuery, updateQuery, currentConnection, createQuery, deleteQuery } =
     useQueryData();
   const [schema, setSchema] = useState<ConnectionSchema | null>(null);
   const [queryContent, setQueryContent] = useState("");
@@ -94,7 +94,7 @@ export function SqlEditor() {
     null
   );
 
-  // Handle Cmd+N / Ctrl+N for new query
+  // Handle keyboard shortcuts: Cmd+N for new query, Cmd+W to close current query
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "n") {
@@ -108,11 +108,15 @@ export function SqlEditor() {
           });
         }
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === "w" && currentQuery) {
+        e.preventDefault();
+        deleteQuery(currentQuery);
+      }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [currentConnection, createQuery]);
+  }, [currentConnection, createQuery, currentQuery, deleteQuery]);
 
   // Simplified handleChange function
   const handleChange = useCallback(
