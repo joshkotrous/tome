@@ -521,9 +521,11 @@ async function generateLocalModel(
   model: string = "llama3.2",
   maxSteps = 5
 ): Promise<GenerateTextResult<ToolMap, never>> {
+  const proxyFetch = getProxyFetch();
   const localProvider = createOpenAI({
     baseURL,
     apiKey: "local-model",
+    fetch: proxyFetch,
   });
   return await generateText({
     model: localProvider(model),
